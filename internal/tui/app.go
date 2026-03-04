@@ -36,6 +36,9 @@ type model struct {
 	adding   bool
 	addInput string
 
+	// Month view cursor (1-based day of month)
+	monthCursorDay int
+
 	// Help overlay
 	showHelp bool
 
@@ -127,12 +130,18 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "j", "down":
+		if m.viewMode == monthView {
+			return m.monthCursorMove(7), nil
+		}
 		if m.cursor < len(m.allTasks)-1 {
 			m.cursor++
 		}
 		return m, nil
 
 	case "k", "up":
+		if m.viewMode == monthView {
+			return m.monthCursorMove(-7), nil
+		}
 		if m.cursor > 0 {
 			m.cursor--
 		}
@@ -171,27 +180,32 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "m":
 		m.viewMode = monthView
+		m.monthCursorDay = m.viewDate.Day()
 		m.refreshData()
 		return m, nil
 
-	case "h", "left":
-		m.viewDate = m.viewDate.AddDate(0, 0, -1)
-		if m.viewMode == weekView {
-			m.viewDate = m.viewDate.AddDate(0, 0, -6)
-		} else if m.viewMode == monthView {
-			m.viewDate = m.viewDate.AddDate(0, -1, 0)
+	case "left":
+		if m.viewMode == monthView {
+			return m.monthCursorMove(-1), nil
 		}
-		m.refreshData()
-		return m, nil
+		return m.timeNav(-1), nil
 
-	case "l", "right":
-		m.viewDate = m.viewDate.AddDate(0, 0, 1)
-		if m.viewMode == weekView {
-			m.viewDate = m.viewDate.AddDate(0, 0, 6)
-		} else if m.viewMode == monthView {
-			m.viewDate = m.viewDate.AddDate(0, 1, 0)
+	case "right":
+		if m.viewMode == monthView {
+			return m.monthCursorMove(1), nil
 		}
-		m.refreshData()
+		return m.timeNav(1), nil
+
+	case "h":
+		return m.timeNav(-1), nil
+
+	case "l":
+		return m.timeNav(1), nil
+
+	case "enter":
+		if m.viewMode == monthView {
+			return m.monthDrillDown(), nil
+		}
 		return m, nil
 
 	case "t":
@@ -205,6 +219,43 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m model) timeNav(dir int) model {
+	switch m.viewMode {
+	case dayView:
+		m.viewDate = m.viewDate.AddDate(0, 0, dir)
+	case weekView:
+		m.viewDate = m.viewDate.AddDate(0, 0, 7*dir)
+	case monthView:
+		m.viewDate = m.viewDate.AddDate(0, dir, 0)
+		m.monthCursorDay = min(m.monthCursorDay, daysInMonth(m.viewDate))
+	}
+	m.refreshData()
+	return m
+}
+
+func (m model) monthCursorMove(delta int) model {
+	dim := daysInMonth(m.viewDate)
+	newDay := m.monthCursorDay + delta
+	if newDay < 1 {
+		newDay = 1
+	} else if newDay > dim {
+		newDay = dim
+	}
+	m.monthCursorDay = newDay
+	return m
+}
+
+func (m model) monthDrillDown() model {
+	m.viewDate = time.Date(m.viewDate.Year(), m.viewDate.Month(), m.monthCursorDay, 0, 0, 0, 0, m.viewDate.Location())
+	m.viewMode = dayView
+	m.refreshData()
+	return m
+}
+
+func daysInMonth(t time.Time) int {
+	return time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, t.Location()).Day()
 }
 
 func (m model) handleAddInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -272,7 +323,11 @@ func renderFooter(m model) string {
 		viewIndicator = "[d]ay [w]eek [M]onth"
 	}
 
-	return helpStyle.Render(fmt.Sprintf("  %s  |  j/k:move  space:done  a:add  x:delete  h/l:nav  t:today  ?:help  q:quit", viewIndicator))
+	keys := "j/k:move  space:done  a:add  x:delete  h/l:nav  t:today  ?:help  q:quit"
+	if m.viewMode == monthView {
+		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  t:today  ?:help  q:quit"
+	}
+	return helpStyle.Render(fmt.Sprintf("  %s  |  %s", viewIndicator, keys))
 }
 
 func renderHelp(m model) string {
@@ -280,11 +335,12 @@ func renderHelp(m model) string {
   Kanteto — Keyboard Shortcuts
 
   Navigation
-    j / ↓       Move down
-    k / ↑       Move up
-    h / ←       Previous day/week/month
-    l / →       Next day/week/month
+    j / ↓       Move down (week in month view)
+    k / ↑       Move up (week in month view)
+    ← / →       Move by day in month view
+    h / l       Previous/next day, week, or month
     t           Jump to today
+    enter       Open selected day (month view)
 
   Views
     d           Day view

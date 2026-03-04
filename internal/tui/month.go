@@ -61,8 +61,15 @@ func renderMonthView(m model) string {
 				label = fmt.Sprintf("%d(%d)", day, len(tasks))
 			}
 
+			selected := day == m.monthCursorDay
+			if selected {
+				label = fmt.Sprintf("[%s]", label)
+			}
+
 			style := lipgloss.NewStyle().Width(colWidth)
-			if d.Year() == now.Year() && d.YearDay() == now.YearDay() {
+			if selected {
+				style = style.Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("236"))
+			} else if d.Year() == now.Year() && d.YearDay() == now.YearDay() {
 				style = style.Bold(true).Foreground(lipgloss.Color("14"))
 			} else if len(tasks) > 0 {
 				style = style.Foreground(lipgloss.Color("11"))
