@@ -46,6 +46,48 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-03
+
+### Added
+
+- Go project scaffolding: `go mod init`, Cobra root command, directory structure (`cmd/`, `internal/task/`, `internal/store/`, `internal/tui/`, `internal/daemon/`, `internal/nlp/`, `internal/config/`).
+- Task domain model with ULID-based ID generation (`internal/task/model.go`, `internal/task/id.go`).
+- XDG-compliant config package loading from `~/.config/kanteto/config.toml` (`internal/config/`).
+- NLP date parser supporting natural language dates (`march 11`, `tomorrow at 3pm`, `next friday`, `in 5 minutes`, `at 3pm`) and durations (`1 hour`, `30m`, `2 days`) (`internal/nlp/`).
+- SQLite store with pure-Go `modernc.org/sqlite`, WAL mode, auto-migration, CRUD, date-range queries, and reminder queries (`internal/store/`).
+- Task service layer with Repository interface: Add, Complete, Delete, Snooze, ListAll, ListToday, ListOverdue, ListUndated, reminder management (`internal/task/service.go`).
+- Recurring task engine: daily/weekly/weekdays/<day> patterns, auto-advance on completion (`internal/task/recurrence.go`).
+- CLI commands: `kt add` (with `--by` and `--every` flags), `kt done`, `kt rm`, `kt snooze`, `kt list`, `kt daemon`.
+- Bubble Tea TUI with day/week/month views, j/k navigation, space to complete, a to add inline with NLP parsing, x to delete, h/l time navigation, d/w/m view switching, ? help overlay.
+- Urgency color gradient: white (>2h) → yellow (2h) → amber (1h) → orange (30m) → red (overdue).
+- ANYTIME section for undated tasks in both CLI list and TUI day view.
+- Reminder daemon checking every 30s with audible alerts via paplay/afplay/aplay.
+- `ExtractDeadline` for inline TUI input: "test kt in 5 minutes" → title + deadline.
+
+### Issues Closed
+
+- `kanteto-14p` (epic): Foundation — project scaffolding and config
+- `kanteto-14p.1`: Initialize Go module and project structure
+- `kanteto-14p.2`: Implement task domain model with ULID
+- `kanteto-14p.3`: Implement XDG config package
+- `kanteto-14p.4`: Implement Cobra CLI skeleton with root command
+- `kanteto-9xs`: Implement NLP date parsing
+- `kanteto-nl4`: Implement SQLite store with migrations
+- `kanteto-90e`: Implement task service layer
+- `kanteto-5kz`: Implement kt add command with NLP
+- `kanteto-1xd`: Implement kt done and kt rm commands
+- `kanteto-r8s`: Implement kt snooze command
+- `kanteto-pf3`: Implement kt list CLI command
+- `kanteto-iwx`: Implement recurring tasks
+- `kanteto-2o2`: Implement reminder daemon
+- `kanteto-f8b`: Implement Bubble Tea TUI with day view
+- `kanteto-dvf`: Implement week and month TUI views
+- `kanteto-0nt`: Implement urgency color gradient
+- `kanteto-wwp`: Implement TUI inline add and help overlay
+- `kanteto-dki`: Implement time navigation in TUI
+
+---
+
 ### Added
 
 - Initialized Dolt-backed beads database with `bd init --force` and restored epic `kanteto-14p` from JSONL backup.
