@@ -31,8 +31,13 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
-		if len(overdue) == 0 && len(today) == 0 && len(upcoming) == 0 {
-			fmt.Println("No tasks. Add one with: kt add \"your task\" --by \"tomorrow\"")
+		undated, err := svc.ListUndated()
+		if err != nil {
+			return err
+		}
+
+		if len(overdue) == 0 && len(today) == 0 && len(upcoming) == 0 && len(undated) == 0 {
+			fmt.Println("No tasks. Add one with: kt add \"your task\"")
 			return nil
 		}
 
@@ -51,6 +56,12 @@ var listCmd = &cobra.Command{
 		if len(upcoming) > 0 {
 			fmt.Println("UPCOMING")
 			printTasks(upcoming)
+			fmt.Println()
+		}
+
+		if len(undated) > 0 {
+			fmt.Println("ANYTIME")
+			printTasks(undated)
 		}
 
 		return nil
