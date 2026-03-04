@@ -1,0 +1,11 @@
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
+
+# override supersecret hiding of ai tools
+!.claude
+!.beads
+
+# claude local settings
+.claude/settings.local.json

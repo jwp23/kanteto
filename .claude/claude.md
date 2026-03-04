@@ -10,7 +10,7 @@ Purpose: This is the main context file that tells the AI which documents to read
 
 To fully understand the project requirements, my operating instructions, and the development plan, I must read the following files in this directory:
 
-- **`prd.md`**: The Product Requirements Document, which details the features, UI/UX, and technical specifications for the game.
+- **`prd.md`**: The Product Requirements Document, which details the features, UI/UX, and technical specifications for Kanteto.
 - **`workflow.md`**: The development workflow using **beads** (`bd`) for issue tracking. Includes session startup, planning, execution, and session completion procedures.
 - **`infra.md`**: The infrastructure documentation, which describes deployment architecture, coding standards, cloud resources, networking, and operational infrastructure requirements.
 - **`security.md`**: The security documentation, which details security requirements, threat models, vulnerability assessments, and security best practices for the application.
