@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/jwp23/kanteto/internal/nlp"
 	"github.com/jwp23/kanteto/internal/task"
 )
 
@@ -210,7 +211,8 @@ func (m model) handleAddInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		if m.addInput != "" {
-			m.svc.Add(m.addInput, nil)
+			title, dueAt := nlp.ExtractDeadline(m.addInput)
+			m.svc.Add(title, dueAt)
 			m.refreshData()
 		}
 		m.adding = false
