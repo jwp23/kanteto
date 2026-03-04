@@ -15,6 +15,7 @@ type Repository interface {
 	ListAll(includeCompleted bool) ([]Task, error)
 	ListByDateRange(start, end time.Time) ([]Task, error)
 	ListOverdue() ([]Task, error)
+	ListOverdueAsOf(asOf time.Time) ([]Task, error)
 	ListUndated() ([]Task, error)
 	ListDueReminders() ([]Task, error)
 	MarkReminded(id string) error
@@ -149,6 +150,11 @@ func (svc *Service) ListToday() ([]Task, error) {
 // ListOverdue returns tasks that are past due and incomplete.
 func (svc *Service) ListOverdue() ([]Task, error) {
 	return svc.repo.ListOverdue()
+}
+
+// ListOverdueAsOf returns incomplete tasks with due dates before the given time.
+func (svc *Service) ListOverdueAsOf(asOf time.Time) ([]Task, error) {
+	return svc.repo.ListOverdueAsOf(asOf)
 }
 
 // ListUndated returns incomplete tasks with no due date.
