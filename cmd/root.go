@@ -8,6 +8,7 @@ import (
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
 	"github.com/jwp23/kanteto/internal/task"
+	"github.com/jwp23/kanteto/internal/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -21,8 +22,9 @@ var rootCmd = &cobra.Command{
 		return initService()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// TODO: launch TUI when implemented
-		return cmd.Help()
+		p := tui.New(svc)
+		_, err := p.Run()
+		return err
 	},
 }
 
