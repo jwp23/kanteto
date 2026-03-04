@@ -21,6 +21,9 @@ func TestParseDate(t *testing.T) {
 		{"next friday", time.Date(2026, 3, 6, 23, 59, 0, 0, time.Local)},
 		{"2026-03-15", time.Date(2026, 3, 15, 23, 59, 0, 0, time.Local)},
 		{"3/15", time.Date(2026, 3, 15, 23, 59, 0, 0, time.Local)},
+		{"in 5 minutes", now.Add(5 * time.Minute)},
+		{"in 1 hour", now.Add(time.Hour)},
+		{"in 2 hours", now.Add(2 * time.Hour)},
 	}
 
 	for _, tt := range tests {
@@ -67,5 +70,31 @@ func TestParseDate_Invalid(t *testing.T) {
 	_, err := ParseDateRelativeTo("not a date at all xyz", now)
 	if err == nil {
 		t.Error("expected error for invalid input, got nil")
+	}
+}
+
+func TestExtractDeadline(t *testing.T) {
+	tests := []struct {
+		input     string
+		wantTitle string
+		wantDue   bool
+	}{
+		{"test kt in 5 minutes", "test kt", true},
+		{"call dentist by tomorrow", "call dentist", true},
+		{"buy groceries", "buy groceries", false},
+		{"meeting at 3pm", "meeting", true},
+		{"just a title", "just a title", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			title, dueAt := ExtractDeadline(tt.input)
+			if title != tt.wantTitle {
+				t.Errorf("title = %q, want %q", title, tt.wantTitle)
+			}
+			if (dueAt != nil) != tt.wantDue {
+				t.Errorf("dueAt nil = %v, want hasDue = %v", dueAt == nil, tt.wantDue)
+			}
+		})
 	}
 }

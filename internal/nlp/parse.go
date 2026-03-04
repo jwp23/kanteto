@@ -44,6 +44,15 @@ func ParseDateRelativeTo(s string, now time.Time) (time.Time, error) {
 	s = strings.TrimSpace(s)
 	lower := strings.ToLower(s)
 
+	// "in 5 minutes", "in 1 hour", "in 2 hours", "in 30m"
+	if strings.HasPrefix(lower, "in ") {
+		durStr := strings.TrimPrefix(lower, "in ")
+		d, err := ParseDuration(durStr)
+		if err == nil {
+			return now.Add(d), nil
+		}
+	}
+
 	hour, min := 23, 59
 	if m := timeRe.FindStringSubmatch(lower); m != nil {
 		h, _ := strconv.Atoi(m[1])
@@ -59,6 +68,11 @@ func ParseDateRelativeTo(s string, now time.Time) (time.Time, error) {
 		hour, min = h, mn
 		// Strip the time part for date parsing
 		lower = strings.TrimSpace(timeRe.ReplaceAllString(lower, ""))
+
+		// If only a time was given (e.g., "at 3pm"), treat as today
+		if lower == "" {
+			return time.Date(now.Year(), now.Month(), now.Day(), h, mn, 0, 0, now.Location()), nil
+		}
 	}
 
 	// ISO date: 2026-03-15
@@ -170,4 +184,46 @@ func parseMonthDay(s string, now time.Time, hour, min int) (time.Time, bool) {
 		candidate = time.Date(y+1, month, day, hour, min, 0, 0, now.Location())
 	}
 	return candidate, true
+}
+
+// deadlineMarker defines a split point in inline input.
+// keyword is the part that belongs to the date expression (e.g., "in", "at").
+type deadlineMarker struct {
+	sep     string // the separator to search for in input
+	keyword string // prefix to prepend to the date string (may be empty)
+}
+
+var deadlineMarkers = []deadlineMarker{
+	{" in ", "in "},
+	{" by ", ""},
+	{" at ", "at "},
+	{" --by ", ""},
+}
+
+// ExtractDeadline splits inline input like "test kt in 5 minutes" into
+// a title ("test kt") and a parsed deadline. If no deadline is found,
+// returns the full input as the title with a nil time.
+func ExtractDeadline(input string) (title string, dueAt *time.Time) {
+	lower := strings.ToLower(input)
+
+	for _, m := range deadlineMarkers {
+		idx := strings.LastIndex(lower, m.sep)
+		if idx < 0 {
+			continue
+		}
+
+		candidateTitle := strings.TrimSpace(input[:idx])
+		candidateDate := m.keyword + strings.TrimSpace(input[idx+len(m.sep):])
+
+		if candidateTitle == "" || candidateDate == "" {
+			continue
+		}
+
+		t, err := ParseDate(candidateDate)
+		if err == nil {
+			return candidateTitle, &t
+		}
+	}
+
+	return input, nil
 }
