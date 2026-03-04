@@ -49,6 +49,16 @@ func renderDayView(m model) string {
 		}
 	}
 
+	if len(m.undated) > 0 {
+		b.WriteString(sectionStyle.Foreground(lipgloss.Color("8")).Render("  ANYTIME"))
+		b.WriteString("\n")
+		for _, t := range m.undated {
+			b.WriteString(renderTask(t, globalIdx, m.cursor))
+			b.WriteString("\n")
+			globalIdx++
+		}
+	}
+
 	if globalIdx == 0 {
 		b.WriteString(dimStyle.Render("\n  No tasks. Press 'a' to add one."))
 		b.WriteString("\n")

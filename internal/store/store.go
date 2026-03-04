@@ -144,6 +144,22 @@ func (s *Store) ListAll(includeCompleted bool) ([]task.Task, error) {
 	return scanTasks(rows)
 }
 
+// ListUndated returns incomplete tasks with no due date.
+func (s *Store) ListUndated() ([]task.Task, error) {
+	rows, err := s.db.Query(
+		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
+		        recurrence_pattern, recurrence_time, recurrence_next_due
+		 FROM tasks
+		 WHERE completed = 0 AND due_at IS NULL
+		 ORDER BY created_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanTasks(rows)
+}
+
 // ListOverdue returns incomplete tasks with due dates before now.
 func (s *Store) ListOverdue() ([]task.Task, error) {
 	rows, err := s.db.Query(

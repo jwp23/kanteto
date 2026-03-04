@@ -26,6 +26,7 @@ type model struct {
 	overdue  []task.Task
 	today    []task.Task
 	upcoming []task.Task
+	undated  []task.Task
 
 	// All tasks flattened for cursor navigation
 	allTasks []task.Task
@@ -100,16 +101,19 @@ func (m *model) refreshData() {
 	overdue, _ := m.svc.ListOverdue()
 	today, _ := m.svc.ListByDateRange(startOfDay, endOfDay)
 	upcoming, _ := m.svc.ListByDateRange(endOfDay, endOfWeek)
+	undated, _ := m.svc.ListUndated()
 
 	m.overdue = overdue
 	m.today = today
 	m.upcoming = upcoming
+	m.undated = undated
 
 	// Flatten for cursor
 	m.allTasks = nil
 	m.allTasks = append(m.allTasks, overdue...)
 	m.allTasks = append(m.allTasks, today...)
 	m.allTasks = append(m.allTasks, upcoming...)
+	m.allTasks = append(m.allTasks, undated...)
 
 	if m.cursor >= len(m.allTasks) {
 		m.cursor = max(0, len(m.allTasks)-1)
