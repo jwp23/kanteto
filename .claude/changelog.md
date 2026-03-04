@@ -46,6 +46,23 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-03
+
+### Added
+
+- `kt list --next` and `kt list --prev` CLI flags for navigating forward/backward by one day (Story 5 completion).
+- `ListOverdueAsOf(time.Time)` method on Repository, Store, and Service for date-relative overdue queries.
+- Month view cursor tracking with `j/k` (by week), `←/→` (by day) navigation in TUI.
+- Press `Enter` in month view to drill down into day view for the selected date (Story 8 completion).
+- Selected day highlighted with `[day]` and inverted style in month grid.
+- Updated TUI footer and help overlay with month-view-specific keybindings.
+- 18 new tests across `cmd/list_test.go` and `internal/tui/month_test.go`.
+
+### Issues Closed
+
+- `kanteto-hqe`: Add --next/--prev flags to kt list CLI command
+- `kanteto-qyg`: Implement month view drill-down on Enter
+
 ## [0.2.0] - 2026-03-03
 
 ### Added
