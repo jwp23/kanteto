@@ -56,9 +56,54 @@ func (svc *Service) Add(title string, dueAt *time.Time) (Task, error) {
 	return t, nil
 }
 
-// Complete marks a task as done.
+// AddRecurring creates a recurring task with pattern and time.
+func (svc *Service) AddRecurring(title, pattern, timeStr string) (Task, error) {
+	nextDue, err := NextOccurrence(pattern, timeStr, time.Now())
+	if err != nil {
+		return Task{}, err
+	}
+
+	remind := nextDue.Add(-svc.leadTime)
+	t := Task{
+		ID:                NewID(),
+		Title:             title,
+		DueAt:             &nextDue,
+		RemindAt:          &remind,
+		CreatedAt:         time.Now(),
+		RecurrencePattern: pattern,
+		RecurrenceTime:    timeStr,
+	}
+
+	if err := svc.repo.Create(t); err != nil {
+		return Task{}, err
+	}
+	return t, nil
+}
+
+// Complete marks a task as done. For recurring tasks, it advances to
+// the next occurrence instead of marking complete.
 func (svc *Service) Complete(id string) error {
-	return svc.repo.Complete(id)
+	t, err := svc.repo.Get(id)
+	if err != nil {
+		return err
+	}
+
+	// Non-recurring: just mark complete
+	if t.RecurrencePattern == "" {
+		return svc.repo.Complete(id)
+	}
+
+	// Recurring: advance to next occurrence
+	nextDue, err := NextOccurrence(t.RecurrencePattern, t.RecurrenceTime, time.Now())
+	if err != nil {
+		return err
+	}
+
+	remind := nextDue.Add(-svc.leadTime)
+	t.DueAt = &nextDue
+	t.RemindAt = &remind
+	t.Reminded = false
+	return svc.repo.Update(t)
 }
 
 // Delete removes a task permanently.

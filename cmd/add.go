@@ -5,18 +5,28 @@ import (
 	"time"
 
 	"github.com/jwp23/kanteto/internal/nlp"
+	"github.com/jwp23/kanteto/internal/task"
 	"github.com/spf13/cobra"
 )
 
-var addBy string
+var (
+	addBy    string
+	addEvery string
+)
 
 var addCmd = &cobra.Command{
 	Use:   "add [title]",
 	Short: "Add a new task",
-	Long:  `Add a task with an optional natural language deadline. Example: kt add "Call dentist" --by "march 11"`,
-	Args:  cobra.ExactArgs(1),
+	Long: `Add a task with an optional natural language deadline or recurrence.
+  kt add "Call dentist" --by "march 11"
+  kt add "Send weekly update" --every "weekdays at 4pm"`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		title := args[0]
+
+		if addEvery != "" {
+			return addRecurring(title, addEvery)
+		}
 
 		var dueAt *time.Time
 		if addBy != "" {
@@ -41,7 +51,25 @@ var addCmd = &cobra.Command{
 	},
 }
 
+func addRecurring(title, every string) error {
+	pattern, timeStr, err := task.ParseRecurrenceSpec(every)
+	if err != nil {
+		return fmt.Errorf("parse recurrence: %w", err)
+	}
+
+	tk, err := svc.AddRecurring(title, pattern, timeStr)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Added: %s (recurring %s at %s, next %s) [%s]\n",
+		tk.Title, pattern, timeStr,
+		tk.DueAt.Format("Mon Jan 2 3:04PM"), tk.ID[:8])
+	return nil
+}
+
 func init() {
 	addCmd.Flags().StringVar(&addBy, "by", "", "deadline in natural language (e.g. \"march 11\", \"tomorrow at 3pm\")")
+	addCmd.Flags().StringVar(&addEvery, "every", "", "recurrence pattern (e.g. \"weekdays at 4pm\", \"friday at 5pm\")")
 	rootCmd.AddCommand(addCmd)
 }
