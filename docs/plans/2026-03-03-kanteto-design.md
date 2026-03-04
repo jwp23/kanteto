@@ -11,7 +11,7 @@ Kanteto is a CLI + TUI tool for tracking small tasks and promises that are too s
 
 ## Tech Stack
 
-- **Language:** Go
+- **Language:** Go 1.26
 - **TUI:** Bubble Tea (charmbracelet/bubbletea) + Lip Gloss (styling)
 - **CLI:** Cobra (spf13/cobra)
 - **Storage:** SQLite via modernc.org/sqlite (pure Go, no CGO)
