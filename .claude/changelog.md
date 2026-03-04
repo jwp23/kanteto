@@ -46,6 +46,12 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+### Added
+
+- Initialized Dolt-backed beads database with `bd init --force` and restored epic `kanteto-14p` from JSONL backup.
+- Installed git hooks via `bd hooks install` (`core.hooksPath = .beads/hooks/`): pre-commit, post-merge, pre-push, post-checkout, prepare-commit-msg.
+- Installed Claude Code hooks (SessionStart, PreCompact) via `bd setup claude --project`.
+
 ### Changed
 
 - Migrated from `.claude/implementation/` and `features.json` to beads (`bd`) for issue tracking.
