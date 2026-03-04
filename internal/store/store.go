@@ -176,6 +176,22 @@ func (s *Store) ListOverdue() ([]task.Task, error) {
 	return scanTasks(rows)
 }
 
+// ListOverdueAsOf returns incomplete tasks with due dates before the given time.
+func (s *Store) ListOverdueAsOf(asOf time.Time) ([]task.Task, error) {
+	rows, err := s.db.Query(
+		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
+		        recurrence_pattern, recurrence_time, recurrence_next_due
+		 FROM tasks
+		 WHERE completed = 0 AND due_at < ?
+		 ORDER BY due_at ASC`, asOf,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanTasks(rows)
+}
+
 // ListDueReminders returns tasks that need reminders fired.
 func (s *Store) ListDueReminders() ([]task.Task, error) {
 	rows, err := s.db.Query(
