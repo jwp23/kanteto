@@ -56,6 +56,12 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 - 6 new beads issues from Quartermaster tech review: PID permissions bug, TUI error rendering, stale infra.md build command, month view N+1 queries, CLI test coverage, duplicate constant cleanup.
 
+### Housekeeping
+
+- Closed 22 stale beads issues already implemented in codebase (identified by Quartermaster backlog review): 5 epics, 6 foundation/data, 3 business logic, 3 CLI, 4 TUI, 1 daemon.
+- Created 2 split-off issues for unfinished slices: `kanteto-n20` (kt edit command), `kanteto-6o6` (TUI snooze prompt).
+- Backlog reduced from 33 to 12 open issues.
+
 ## [0.2.1] - 2026-03-03
 
 ### Added
