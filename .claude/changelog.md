@@ -46,6 +46,16 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote `README.md` with full CLI/TUI usage documentation, install instructions, keybinding tables, and configuration reference.
+- Moved binary entry point from root `main.go` to `cmd/kt/main.go` so `go install .../cmd/kt@latest` produces a `kt` binary.
+- Updated `.gitignore` to use `/kt` (root-only) instead of `kt` which was blocking `cmd/kt/` directory.
+
+### Added
+
+- 6 new beads issues from Quartermaster tech review: PID permissions bug, TUI error rendering, stale infra.md build command, month view N+1 queries, CLI test coverage, duplicate constant cleanup.
+
 ## [0.2.1] - 2026-03-03
 
 ### Added
