@@ -15,7 +15,7 @@ Purpose: This file describes the project's technical foundation, including the p
 ## How to Run it on Your Computer
 
 - **Installation Command:** `go mod download`
-- **Build Command:** `go build -o kt .`
+- **Build Command:** `go build -o kt ./cmd/kt`
 - **Run:** `./kt` (TUI) or `./kt --help` (CLI)
 - **Run Tests:** `go test ./... -v`
 

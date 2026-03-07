@@ -1,8 +1,10 @@
 package task
 
-import "time"
+import (
+	"time"
 
-const defaultLeadTime = 15 * time.Minute
+	"github.com/jwp23/kanteto/internal/config"
+)
 
 // Repository defines the storage contract for tasks.
 type Repository interface {
@@ -29,7 +31,7 @@ type Service struct {
 
 // NewService creates a new task service with default reminder lead time.
 func NewService(repo Repository) *Service {
-	return &Service{repo: repo, leadTime: defaultLeadTime}
+	return &Service{repo: repo, leadTime: config.DefaultLeadTime}
 }
 
 // SetLeadTime configures the reminder lead time.

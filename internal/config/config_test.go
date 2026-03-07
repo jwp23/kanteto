@@ -15,8 +15,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
-	if cfg.ReminderLeadTime != defaultLeadTime {
-		t.Errorf("ReminderLeadTime = %v, want %v", cfg.ReminderLeadTime, defaultLeadTime)
+	if cfg.ReminderLeadTime != DefaultLeadTime {
+		t.Errorf("ReminderLeadTime = %v, want %v", cfg.ReminderLeadTime, DefaultLeadTime)
 	}
 }
 

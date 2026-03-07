@@ -8,7 +8,8 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-const defaultLeadTime = 15 * time.Minute
+// DefaultLeadTime is the default reminder lead time before a task is due.
+const DefaultLeadTime = 15 * time.Minute
 
 // Config holds application configuration.
 type Config struct {
@@ -26,7 +27,7 @@ type tomlConfig struct {
 // Returns defaults if the file does not exist.
 func Load() (Config, error) {
 	cfg := Config{
-		ReminderLeadTime: defaultLeadTime,
+		ReminderLeadTime: DefaultLeadTime,
 	}
 
 	path := filepath.Join(configDir(), "config.toml")
