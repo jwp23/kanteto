@@ -20,6 +20,9 @@ var addCmd = &cobra.Command{
 	Long: `Add a task with an optional natural language deadline or recurrence.
   kt add "Call dentist" --by "march 11"
   kt add "Send weekly update" --every "weekdays at 4pm"`,
+	Example: `  kt add "Call dentist" --by "march 11"
+  kt add "Send weekly update" --every "weekdays at 4pm"
+  kt add "Buy groceries"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		title := args[0]

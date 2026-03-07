@@ -9,7 +9,8 @@ import (
 var daemonCmd = &cobra.Command{
 	Use:   "daemon",
 	Short: "Start the reminder daemon",
-	Long:  "Run the background daemon that checks for due reminders every 30 seconds and plays an audible alert.",
+	Long:    "Run the background daemon that checks for due reminders every 30 seconds and plays an audible alert.",
+	Example: `  kt daemon`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

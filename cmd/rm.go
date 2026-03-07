@@ -8,8 +8,9 @@ import (
 
 var rmCmd = &cobra.Command{
 	Use:   "rm [id]",
-	Short: "Delete a task permanently",
-	Args:  cobra.ExactArgs(1),
+	Short:   "Delete a task permanently",
+	Example: `  kt rm abc1`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := resolveID(args[0])
 		if err != nil {

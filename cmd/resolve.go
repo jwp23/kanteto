@@ -25,10 +25,10 @@ func resolveID(prefix string) (string, error) {
 		if _, err := svc.Get(prefix); err == nil {
 			return prefix, nil
 		}
-		return "", fmt.Errorf("no task found matching %q", prefix)
+		return "", fmt.Errorf("no task found matching %q — run 'kt list' to see available tasks", prefix)
 	}
 	if len(matches) > 1 {
-		return "", fmt.Errorf("ambiguous prefix %q matches %d tasks", prefix, len(matches))
+		return "", fmt.Errorf("prefix %q matches %d tasks — try more characters to narrow it down", prefix, len(matches))
 	}
 
 	return matches[0], nil

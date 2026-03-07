@@ -15,9 +15,10 @@ import (
 var svc *task.Service
 
 var rootCmd = &cobra.Command{
-	Use:   "kt",
-	Short: "Kanteto — track small tasks and promises",
-	Long:  "A CLI and TUI tool for tracking small tasks and promises that are too small for tickets but still need to get done on time.",
+	Use:     "kt",
+	Short:   "Kanteto — track small tasks and promises",
+	Long:    "A CLI and TUI tool for tracking small tasks and promises that are too small for tickets but still need to get done on time.",
+	Version: "0.2.2",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return initService()
 	},

@@ -17,7 +17,10 @@ var (
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks",
-	Long:  "Show tasks organized by OVERDUE / TODAY / UPCOMING sections.",
+	Long: "Show tasks organized by OVERDUE / TODAY / UPCOMING sections.",
+	Example: `  kt list
+  kt list --next
+  kt list --prev`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if listNext && listPrev {
 			return fmt.Errorf("cannot use --next and --prev together")

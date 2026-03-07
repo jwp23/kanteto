@@ -8,8 +8,9 @@ import (
 
 var doneCmd = &cobra.Command{
 	Use:   "done [id]",
-	Short: "Mark a task as completed",
-	Args:  cobra.ExactArgs(1),
+	Short:   "Mark a task as completed",
+	Example: `  kt done abc1`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := resolveID(args[0])
 		if err != nil {

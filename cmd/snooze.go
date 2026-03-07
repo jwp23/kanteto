@@ -12,8 +12,10 @@ var snoozeFor string
 var snoozeCmd = &cobra.Command{
 	Use:   "snooze [id]",
 	Short: "Postpone a task's deadline",
-	Long:  `Snooze a task by a duration. Example: kt snooze abc123 --for "1 hour"`,
-	Args:  cobra.ExactArgs(1),
+	Long: `Snooze a task by a duration. Example: kt snooze abc123 --for "1 hour"`,
+	Example: `  kt snooze abc1 --for "1 hour"
+  kt snooze abc1 --for 30m`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := resolveID(args[0])
 		if err != nil {
