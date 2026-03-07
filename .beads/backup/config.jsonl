@@ -8,4 +8,5 @@
 {"key":"compact_tier2_dep_levels","value":"5"}
 {"key":"compaction_enabled","value":"false"}
 {"key":"issue_prefix","value":"kanteto"}
+{"key":"kv.memory.user-preference-one-line-commit-messages-only-no","value":"User preference: one-line commit messages only. No multi-line commit bodies."}
 {"key":"schema_version","value":"6"}
