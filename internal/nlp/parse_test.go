@@ -24,6 +24,11 @@ func TestParseDate(t *testing.T) {
 		{"in 5 minutes", now.Add(5 * time.Minute)},
 		{"in 1 hour", now.Add(time.Hour)},
 		{"in 2 hours", now.Add(2 * time.Hour)},
+		{"friday", time.Date(2026, 3, 6, 23, 59, 0, 0, time.Local)},
+		{"friday at 2pm", time.Date(2026, 3, 6, 14, 0, 0, 0, time.Local)},
+		{"this friday", time.Date(2026, 3, 6, 23, 59, 0, 0, time.Local)},
+		{"monday", time.Date(2026, 3, 9, 23, 59, 0, 0, time.Local)},
+		{"this mon", time.Date(2026, 3, 9, 23, 59, 0, 0, time.Local)},
 	}
 
 	for _, tt := range tests {

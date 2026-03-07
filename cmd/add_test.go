@@ -62,6 +62,27 @@ func TestAdd_WithDeadline(t *testing.T) {
 	}
 }
 
+func TestAdd_Recurring(t *testing.T) {
+	testSvc := setupTestService(t)
+
+	out, err := execAdd(t, testSvc, "Standup", "--every", "daily at 9am")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "recurring") {
+		t.Errorf("expected output to contain 'recurring', got:\n%s", out)
+	}
+}
+
+func TestAdd_Recurring_InvalidPattern(t *testing.T) {
+	testSvc := setupTestService(t)
+
+	_, err := execAdd(t, testSvc, "Bad", "--every", "gibberish")
+	if err == nil {
+		t.Error("expected error for invalid recurrence pattern")
+	}
+}
+
 func TestAdd_MissingTitle(t *testing.T) {
 	testSvc := setupTestService(t)
 

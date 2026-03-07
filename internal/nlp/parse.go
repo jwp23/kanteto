@@ -106,6 +106,19 @@ func ParseDateRelativeTo(s string, now time.Time) (time.Time, error) {
 		return time.Date(tm.Year(), tm.Month(), tm.Day(), hour, min, 0, 0, now.Location()), nil
 	}
 
+	// "this <weekday>"
+	if strings.HasPrefix(lower, "this ") {
+		dayStr := strings.TrimPrefix(lower, "this ")
+		if wd, ok := dayNames[dayStr]; ok {
+			return nextWeekday(now, wd, hour, min), nil
+		}
+	}
+
+	// Bare weekday: "friday", "mon", etc.
+	if wd, ok := dayNames[lower]; ok {
+		return nextWeekday(now, wd, hour, min), nil
+	}
+
 	// "next <weekday>"
 	if strings.HasPrefix(lower, "next ") {
 		dayStr := strings.TrimPrefix(lower, "next ")

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jwp23/kanteto/internal/task"
 )
 
 func renderWeekView(m model) string {
@@ -40,15 +41,26 @@ func renderWeekView(m model) string {
 	b.WriteString("  " + strings.Join(headers, " "))
 	b.WriteString("\n")
 
-	// Get tasks for each day
+	// Single query for the whole week, then bucket by day
+	weekStart := time.Date(startOfWeek.Year(), startOfWeek.Month(), startOfWeek.Day(), 0, 0, 0, 0, startOfWeek.Location())
+	weekEnd := weekStart.AddDate(0, 0, 7)
+	allTasks, _ := m.svc.ListByDateRange(weekStart, weekEnd)
+
+	tasksByDay := make(map[string][]task.Task)
+	for _, t := range allTasks {
+		if t.DueAt != nil {
+			key := t.DueAt.Format("2006-01-02")
+			tasksByDay[key] = append(tasksByDay[key], t)
+		}
+	}
+
+	// Build columns from bucketed tasks
 	var columns [][]string
 	maxRows := 0
 	for i := 0; i < 7; i++ {
 		d := startOfWeek.AddDate(0, 0, i)
-		dayStart := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
-		dayEnd := dayStart.Add(24 * time.Hour)
-
-		tasks, _ := m.svc.ListByDateRange(dayStart, dayEnd)
+		key := d.Format("2006-01-02")
+		tasks := tasksByDay[key]
 		var lines []string
 		for _, t := range tasks {
 			color := UrgencyColor(t.DueAt)

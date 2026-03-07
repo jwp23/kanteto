@@ -14,6 +14,9 @@ type Task struct {
 	Reminded          bool
 	RecurrencePattern string
 	RecurrenceTime    string
+	// RecurrenceNextDue is reserved for future optimization (caching the next
+	// occurrence to avoid recomputation). Currently unused — NextOccurrence()
+	// computes live.
 	RecurrenceNextDue *time.Time
 }
 

@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/jwp23/kanteto/internal/task"
 )
 
 func testDayModel(t *testing.T) model {
@@ -97,6 +100,57 @@ func TestDayView_CursorClamp(t *testing.T) {
 
 	if m.cursor >= len(m.allTasks) {
 		t.Errorf("cursor %d should be < len(allTasks) %d", m.cursor, len(m.allTasks))
+	}
+}
+
+func TestRenderDayView_Sections(t *testing.T) {
+	m := testDayModel(t)
+	now := time.Now()
+
+	yesterday := time.Date(now.Year(), now.Month(), now.Day()-1, 10, 0, 0, 0, time.Local)
+	m.svc.Add("overdue task", &yesterday)
+
+	todaySoon := now.Add(1 * time.Minute)
+	m.svc.Add("today task", &todaySoon)
+
+	tomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 10, 0, 0, 0, time.Local)
+	m.svc.Add("upcoming task", &tomorrow)
+
+	m.svc.Add("undated task", nil)
+	m.refreshData()
+
+	output := renderDayView(m)
+	for _, section := range []string{"OVERDUE", "TODAY", "UPCOMING", "ANYTIME"} {
+		if !strings.Contains(output, section) {
+			t.Errorf("expected output to contain %q, got:\n%s", section, output)
+		}
+	}
+}
+
+func TestRenderDayView_Empty(t *testing.T) {
+	m := testDayModel(t)
+	output := renderDayView(m)
+	if !strings.Contains(output, "No tasks") {
+		t.Errorf("expected output to contain 'No tasks', got:\n%s", output)
+	}
+}
+
+func TestRenderTask_CursorPrefix(t *testing.T) {
+	now := time.Now()
+	tk := task.Task{
+		ID:        "abcdef1234567890",
+		Title:     "Test task",
+		CreatedAt: now,
+	}
+
+	selected := renderTask(tk, 0, 0)
+	if !strings.Contains(selected, ">") {
+		t.Errorf("selected task should contain '>', got:\n%s", selected)
+	}
+
+	notSelected := renderTask(tk, 1, 0)
+	if strings.Contains(notSelected, ">") {
+		t.Errorf("non-selected task should not contain '>', got:\n%s", notSelected)
 	}
 }
 
