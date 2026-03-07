@@ -36,8 +36,15 @@ type model struct {
 	adding   bool
 	addInput string
 
+	// Snooze mode
+	snoozing    bool
+	snoozeInput string
+
 	// Month view cursor (1-based day of month)
 	monthCursorDay int
+
+	// Pre-fetched tasks for month view (keyed by day of month)
+	monthTasks map[int][]task.Task
 
 	// Help overlay
 	showHelp bool
@@ -90,6 +97,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleAddInput(msg)
 		}
 
+		if m.snoozing {
+			return m.handleSnoozeInput(msg)
+		}
+
 		return m.handleKeypress(msg)
 	}
 
@@ -122,9 +133,25 @@ func (m *model) refreshData() {
 	if m.cursor >= len(m.allTasks) {
 		m.cursor = max(0, len(m.allTasks)-1)
 	}
+
+	// Pre-fetch month tasks in a single query
+	if m.viewMode == monthView {
+		now := m.viewDate
+		firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		firstOfNextMonth := firstOfMonth.AddDate(0, 1, 0)
+		monthTasks, _ := m.svc.ListByDateRange(firstOfMonth, firstOfNextMonth)
+		m.monthTasks = make(map[int][]task.Task)
+		for _, t := range monthTasks {
+			if t.DueAt != nil {
+				day := t.DueAt.Day()
+				m.monthTasks[day] = append(m.monthTasks[day], t)
+			}
+		}
+	}
 }
 
 func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.err = nil
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -150,7 +177,9 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case " ":
 		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
 			t := m.allTasks[m.cursor]
-			m.svc.Complete(t.ID)
+			if err := m.svc.Complete(t.ID); err != nil {
+				m.err = err
+			}
 			m.refreshData()
 		}
 		return m, nil
@@ -158,7 +187,9 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "x", "delete":
 		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
 			t := m.allTasks[m.cursor]
-			m.svc.Delete(t.ID)
+			if err := m.svc.Delete(t.ID); err != nil {
+				m.err = err
+			}
 			m.refreshData()
 		}
 		return m, nil
@@ -166,6 +197,13 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		m.adding = true
 		m.addInput = ""
+		return m, nil
+
+	case "s":
+		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
+			m.snoozing = true
+			m.snoozeInput = ""
+		}
 		return m, nil
 
 	case "d":
@@ -263,7 +301,9 @@ func (m model) handleAddInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.addInput != "" {
 			title, dueAt := nlp.ExtractDeadline(m.addInput)
-			m.svc.Add(title, dueAt)
+			if _, err := m.svc.Add(title, dueAt); err != nil {
+				m.err = err
+			}
 			m.refreshData()
 		}
 		m.adding = false
@@ -289,6 +329,44 @@ func (m model) handleAddInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m model) handleSnoozeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.snoozeInput != "" {
+			d, err := nlp.ParseDuration(m.snoozeInput)
+			if err != nil {
+				m.err = err
+			} else {
+				t := m.allTasks[m.cursor]
+				if err := m.svc.Snooze(t.ID, d); err != nil {
+					m.err = err
+				}
+			}
+			m.refreshData()
+		}
+		m.snoozing = false
+		m.snoozeInput = ""
+		return m, nil
+
+	case "esc":
+		m.snoozing = false
+		m.snoozeInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.snoozeInput) > 0 {
+			m.snoozeInput = m.snoozeInput[:len(m.snoozeInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.String()) == 1 {
+			m.snoozeInput += msg.String()
+		}
+		return m, nil
+	}
+}
+
 func (m model) View() string {
 	if m.showHelp {
 		return renderHelp(m)
@@ -309,8 +387,16 @@ func (m model) View() string {
 }
 
 func renderFooter(m model) string {
+	if m.err != nil {
+		return errorStyle.Render(fmt.Sprintf("  Error: %s", m.err))
+	}
+
 	if m.adding {
 		return fmt.Sprintf("  > %s█", m.addInput)
+	}
+
+	if m.snoozing {
+		return fmt.Sprintf("  snooze for: %s█  (e.g. 1h, 30m, 2 hours)", m.snoozeInput)
 	}
 
 	viewIndicator := "[d]ay [w]eek [m]onth"
@@ -323,7 +409,7 @@ func renderFooter(m model) string {
 		viewIndicator = "[d]ay [w]eek [M]onth"
 	}
 
-	keys := "j/k:move  space:done  a:add  x:delete  h/l:nav  t:today  ?:help  q:quit"
+	keys := "j/k:move  space:done  a:add  s:snooze  x:delete  h/l:nav  t:today  ?:help  q:quit"
 	if m.viewMode == monthView {
 		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  t:today  ?:help  q:quit"
 	}
@@ -350,6 +436,7 @@ func renderHelp(m model) string {
   Actions
     space       Complete task
     a           Add new task
+    s           Snooze task
     x / delete  Delete task
     ?           Toggle help
     q           Quit

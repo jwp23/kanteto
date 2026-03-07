@@ -39,6 +39,10 @@ var (
 			Foreground(lipgloss.Color("12")).
 			MarginBottom(1)
 
+	errorStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("9"))
+
 	// Urgency colors: white -> yellow -> amber -> orange -> red
 	urgencyWhite  = lipgloss.Color("15")
 	urgencyYellow = lipgloss.Color("11")

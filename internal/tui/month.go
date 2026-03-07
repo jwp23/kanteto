@@ -53,8 +53,7 @@ func renderMonthView(m model) string {
 			}
 
 			d := time.Date(year, month, day, 0, 0, 0, 0, date.Location())
-			dayEnd := d.Add(24 * time.Hour)
-			tasks, _ := m.svc.ListByDateRange(d, dayEnd)
+			tasks := m.monthTasks[day]
 
 			label := fmt.Sprintf("%d", day)
 			if len(tasks) > 0 {

@@ -38,6 +38,7 @@ func testModel(t *testing.T) model {
 		viewMode:       monthView,
 		viewDate:       viewDate,
 		monthCursorDay: 15,
+		monthTasks:     make(map[int][]task.Task),
 		width:          80,
 		height:         24,
 	}
