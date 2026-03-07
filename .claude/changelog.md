@@ -44,6 +44,23 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ---
 
+## [0.2.3] - 2026-03-06
+
+### Added
+
+- Daemon lifecycle management: `kt daemon start`, `kt daemon stop`, `kt daemon status` subcommands (`kanteto-imw`).
+- `PIDPath()`, `IsRunning()`, `Stop()` functions with duplicate instance prevention and `syscall.Signal(0)` process checking.
+- Context-based shutdown with `signal.NotifyContext` for SIGINT/SIGTERM handling.
+- `SoundPlayer` interface for testable reminder playback (`kanteto-d7k`).
+- 11 daemon unit tests covering PID lifecycle, duplicate prevention, reminder firing, context cancellation (63.3% coverage) (`kanteto-d7k`).
+- 3 daemon integration tests: reminder flow, PID cleanup, concurrent SQLite WAL access (`kanteto-4hh`).
+- 14 TUI tests across 3 new files: day view sections/cursor/empty state, keybindings (j/k/space/x/view switching/time nav/help), add/snooze input modes (53.5% coverage) (`kanteto-s01`).
+- `Makefile` with build, test, vet, cover, smoke, clean, all targets (`kanteto-6iw`).
+
+### Issues Closed
+
+- `kanteto-imw`, `kanteto-d7k`, `kanteto-s01`, `kanteto-6iw`, `kanteto-4hh`
+
 ## [0.2.2] - 2026-03-06
 
 ### Fixed
