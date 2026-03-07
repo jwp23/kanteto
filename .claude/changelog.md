@@ -44,6 +44,32 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ---
 
+## [0.2.4] - 2026-03-06
+
+### Fixed
+
+- Version string corrected from `0.2.2` → `0.2.3` in `cmd/root.go` (`kanteto-4hl`).
+- Week view N+1 query pattern: replaced 7 per-day `ListByDateRange` calls with single query + map bucketing (`kanteto-pms`).
+
+### Added
+
+- NLP bare weekday parsing: `"friday"`, `"this mon"`, `"this friday"` etc. now resolve to next occurrence (`kanteto-pms`).
+- 6 store-level tests: ListUndated, ListOverdue, ListOverdueAsOf, ListDueReminders, MarkReminded, Update (`kanteto-6w8`).
+- 2 CLI recurring tests: happy path + invalid pattern (`kanteto-6w8`).
+- 6 TUI render tests: day view sections/empty/cursor prefix, week view header/tasks/empty (`kanteto-6w8`).
+- Documentation comment on `RecurrenceNextDue` dead column (`kanteto-4hl`).
+
+### Coverage Improvements
+
+- `internal/store`: 62.7% → 87.3%
+- `internal/tui`: 53.5% → 84.2%
+- `internal/nlp`: 89.2% → 90.9%
+- `cmd`: 58.8% → 62.8%
+
+### Issues Closed
+
+- `kanteto-4hl`, `kanteto-6w8`, `kanteto-pms`
+
 ## [0.2.3] - 2026-03-06
 
 ### Added
