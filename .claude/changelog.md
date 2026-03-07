@@ -44,6 +44,30 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ---
 
+## [0.2.2] - 2026-03-06
+
+### Fixed
+
+- Daemon PID file permissions tightened from 0644 to 0600 (`kanteto-fe6`).
+- TUI now captures and renders errors from Complete/Delete/Add operations in red footer text (`kanteto-ici`).
+- Month view eliminated N+1 queries — single `ListByDateRange` call with map lookup (`kanteto-y28`).
+- `infra.md` build command corrected to `go build -o kt ./cmd/kt` (`kanteto-fnj`).
+- Consolidated duplicate `defaultLeadTime` constant — exported from `config` package (`kanteto-zyq`).
+
+### Added
+
+- `kt edit [id] --title --by --every` command for editing tasks (`kanteto-n20`).
+- TUI snooze prompt: press `s` to snooze selected task with duration input (`kanteto-6o6`).
+- `--version` flag on root command, prints `kt version 0.2.2` (`kanteto-ak1`).
+- `Example` fields on all CLI commands for `--help` output (`kanteto-ak1`).
+- Friendlier error messages in `resolveID` with guidance on next steps (`kanteto-ak1`).
+- 11 new CLI command tests: add, done, snooze, rm, edit (`kanteto-oja`).
+- 6 new integration tests: full lifecycle, recurring advance, snooze, date range, overdue, edit workflow (`kanteto-286`).
+
+### Issues Closed
+
+- `kanteto-fe6`, `kanteto-fnj`, `kanteto-zyq`, `kanteto-ici`, `kanteto-y28`, `kanteto-n20`, `kanteto-6o6`, `kanteto-ak1`, `kanteto-oja`, `kanteto-286`, `kanteto-va6`
+
 ## [Unreleased]
 
 ### Changed
@@ -51,10 +75,6 @@ This ensures transparency and traceability for all AI-executed workflows.
 - Rewrote `README.md` with full CLI/TUI usage documentation, install instructions, keybinding tables, and configuration reference.
 - Moved binary entry point from root `main.go` to `cmd/kt/main.go` so `go install .../cmd/kt@latest` produces a `kt` binary.
 - Updated `.gitignore` to use `/kt` (root-only) instead of `kt` which was blocking `cmd/kt/` directory.
-
-### Added
-
-- 6 new beads issues from Quartermaster tech review: PID permissions bug, TUI error rendering, stale infra.md build command, month view N+1 queries, CLI test coverage, duplicate constant cleanup.
 
 ### Housekeeping
 
