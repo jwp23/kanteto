@@ -1,79 +1,66 @@
-<!-- NOTE: THIS ENTIRE FILE IS OPTIONAL! YOU CAN, AND SHOULD, AVOID USING THIS FILE UNLESS YOU KNOW EXACTLY HOW TO IMPLEMENT THIS. WHEN IN DOUBT, ANY LLM SHOULD BE ABLE TO HELP YOU FIGURE THIS OUT FOR YOUR PROJECT! -->
-
 # Testing Strategy
 
-Purpose: This file outlines the strategy for testing the application to ensure it works correctly and prevent future bugs.
-
-> This file explains how we'll test the application to make sure it works correctly and doesn't break when we make changes. A good testing plan gives us confidence to build and release new features.
+Purpose: This file outlines the strategy for testing Kanteto to ensure it works correctly and prevent regressions.
 
 ---
 
 ## 1. Our Testing Philosophy
 
-> What is our main goal for testing? We don't need to test every single line of code. Let's define what's most important.
-
-- **Overall Goal:** [e.g., Ensure the most critical user journeys always work, Achieve 80% code coverage, Prevent regressions]
-
-  - **_Example 1 (Local Python App):_**
-    **Overall Goal: Ensure the core logic is correct.** The main goal is to verify that the data processing functions produce the correct output for a given input.
-
-  - **_Example 2 (Next.js + Supabase App):_**
-    **Overall Goal: Ensure the most critical user journeys always work.** We want to guarantee that a user can always sign up, log in, create a post, and view their dashboard.
+- **Overall Goal:** Every public behavior must have a test. We measure coverage by "does this behavior have a test?" not by line-coverage percentages.
+- **TDD:** Write a failing test first, then implement the code to make it pass.
+- **No mocked-behavior tests:** Tests must exercise real logic. Never write a test that only validates mocked return values.
+- **Pristine output:** Test output must be clean. If a test intentionally triggers an error, capture and assert on it — no unchecked warnings or log noise.
+- **Broken Windows:** All test failures are our responsibility. Never delete a failing test — diagnose and fix it, or raise the issue.
 
 ---
 
-## 2. Types of Tests We Will Write
+## 2. Types of Tests We Write
 
-> Different kinds of tests check different things. Here's a quick breakdown of what we'll use.
+- **Unit Tests:** Yes. Domain model behavior, NLP date parsing, recurrence logic, config loading, urgency color assignment. Table-driven tests are the default pattern.
+- **Integration Tests:** Yes. Full lifecycle workflows (add -> list -> complete -> get), recurring task advancement, CLI command execution with stdout/stderr capture, TUI model updates with simulated keypresses. Build-tagged (`integration`) tests for daemon lifecycle with real goroutines and SQLite WAL concurrency.
+- **End-to-End (E2E) Tests:** No. Kanteto is a local CLI tool with no network dependencies or browser UI.
 
-- **Unit Tests:** [Do we write these? What do they test? e.g., Yes, for individual functions and UI components in isolation.]
-- **Integration Tests:** [Do we write these? What do they test? e.g., Yes, to check if our UI components correctly fetch data from the backend.]
-- **End-to-End (E2E) Tests:** [Do we write these? What do they test? e.g., No, not at this stage. OR Yes, to simulate a full user journey in a real browser.]
+### Package Test Map
 
-  - **_Example 1 (Local Python App):_**
-    **Unit Tests: Yes, for individual functions.** We will write tests to check that each data transformation function works as expected.
-    **Integration Tests: No.** The script is simple and doesn't have many integrated parts.
-    **End-to-End (E2E) Tests: No.**
-
-  - **_Example 2 (Next.js + Supabase App):_**
-    **Unit Tests: Yes, for individual React components and utility functions.** We'll test that components render correctly given specific props.
-    **Integration Tests: Yes, to check if UI components correctly interact with Supabase.** For example, we'll test that clicking the "Log In" button calls the `supabase.auth.signInWithPassword` function.
-    **End-to-End (E2E) Tests: Yes, for the login and new post flows.** We will write a small number of E2E tests to simulate these critical paths from start to finish.
+| Package | Test Focus |
+|---|---|
+| `internal/task/` | Model behavior (overdue, due-today), service CRUD, recurrence parsing/advancement, ULID generation, full lifecycle integration |
+| `internal/store/` | CRUD operations, date-range queries, overdue/undated/reminder queries, field updates |
+| `internal/nlp/` | Date parsing (month names, relative dates, weekdays, ISO, durations), deadline extraction from natural language |
+| `internal/tui/` | Day/week/month view rendering, keybinding navigation, input modes (add/snooze), cursor movement and clamping, urgency color gradients |
+| `internal/daemon/` | Lifecycle management (PID, start/stop/duplicate prevention), reminder firing and marking, context cancellation, concurrent DB access |
+| `internal/config/` | Default values, TOML file loading, XDG path resolution |
+| `cmd/` | CLI commands (add/done/edit/list/rm/snooze) with happy-path and error-case coverage, flag validation |
 
 ---
 
 ## 3. Testing Frameworks & Tools
 
-> What software will we use to write and run our tests?
+- **Framework:** Go stdlib `testing` package
+- **Run all tests:** `go test ./... -v`
+- **Run integration tests:** `go test ./... -v -tags=integration`
+- **Lint before commit:** `go vet ./...` and `staticcheck ./...`
 
-- **Main Testing Tool(s):** [e.g., pytest, Jest, React Testing Library, Cypress]
-- **How to Run Tests (Command):** [e.g., `pytest`, `npm test`, `npm run cypress:open`]
+### Key Patterns
 
-  - **_Example 1 (Local Python App):_**
-    **Main Testing Tool(s): `pytest`**. It's a standard, easy-to-use testing framework for Python.
-    **How to Run Tests (Command): `pytest`**.
-
-  - **_Example 2 (Next.js + Supabase App):_**
-    **Main Testing Tool(s): `Jest` and `React Testing Library`** for unit and integration tests. `Cypress` for end-to-end tests.
-    **How to Run Tests (Command): `npm test`** for Jest, and **`npm run cypress:run`** for Cypress.
+- **Table-driven tests** — default for any function with multiple input/output cases (NLP parsing, model predicates, urgency colors, recurrence specs)
+- **In-memory SQLite** — store and service tests use `:memory:` databases with `t.Cleanup()` teardown
+- **`t.Helper()`** — all test setup functions are marked as helpers for clean failure output
+- **`t.Setenv()`** — environment variable isolation for config and XDG path tests
+- **CLI exec wrappers** — `execAdd()`, `execDone()`, etc. capture stdout/stderr for assertion
+- **TUI key simulation** — `sendKey()` and `sendSpecialKey()` simulate keypresses against Bubble Tea models
+- **Fixed "now" times** — date-sensitive tests use deterministic reference times
 
 ---
 
-## 4. Key Test Scenarios
+## 4. Coverage Expectations
 
-> Let's list the most important user actions that absolutely must work. This helps us prioritize what to test first. Think back to the "User Stories" in your `prd.md` file.
+Every user story in `prd.md` must have corresponding test coverage. Rather than a numeric percentage target, we enforce coverage by layer:
 
-- **Scenario 1:** [e.g., A user should be able to log in with correct credentials.]
-- **Scenario 2:** [e.g., A user should see an error if they try to log in with the wrong password.]
-- **Scenario 3:** [e.g., A logged-in user should be able to create a new item.]
-
-  - **_Example 1 (Local Python App):_**
-    **Scenario 1:** The script should correctly parse a standard input file.
-    **Scenario 2:** The script should raise an error if an input file is improperly formatted.
-    **Scenario 3:** The script should produce an output file with the correct calculations.
-
-  - **_Example 2 (Next.js + Supabase App):_**
-    **Scenario 1:** A user can sign up for a new account.
-    **Scenario 2:** A user can log in and is redirected to the dashboard.
-    **Scenario 3:** A logged-in user can create a new post, and it appears in their list of posts.
-    **Scenario 4:** A user cannot see or edit posts created by another user.
+- **Store:** Every query method must have a test (CRUD, date-range, overdue, undated, reminders)
+- **Service:** Every public method must have a test (add, complete, delete, snooze, list variants)
+- **CLI:** Every command must have at least one happy-path test and one error-case test
+- **TUI:** Every view must have rendering tests; every keybinding must have a navigation test
+- **NLP:** Every supported date format must appear in a table-driven test case
+- **Daemon:** Lifecycle operations (start, stop, duplicate prevention) and reminder logic must be tested
+- **Config:** Default loading and file-based overrides must be tested
