@@ -49,6 +49,20 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 - **Story 8:** As a user, I want an interactive TUI that launches with `kt` so that I can browse, add, and manage tasks without remembering commands.
   - Keyboard-driven: `j/k` to move, `d/w/m` to switch views, `a` to add, `space` to complete.
 
+### NLP & Task Editing
+
+- **Story 9:** As a user, I want to type deadlines naturally (e.g., "today 4pm", "friday 12pm") without needing the word "at" so that task entry matches how I actually talk.
+    * Feature name: `nlp_bare_time`
+
+- **Story 10:** As a user, I want to add tasks like "review doc Friday 2pm" (date at the end, no "by" or "at" keyword) so that deadlines are detected regardless of phrasing.
+    * Feature name: `nlp_trailing_date`
+
+- **Story 11:** As a user, I want to press `e` in the TUI to edit a task's deadline inline so that I can reschedule without leaving the interface.
+    * Feature name: `tui_edit_time`
+
+- **Story 12:** As a user, I want to re-parse existing undated tasks so that tasks created before the NLP fix get their deadlines detected retroactively.
+    * Feature name: `reparse_migration`
+
 ---
 
 ## 3. The Look and Feel
