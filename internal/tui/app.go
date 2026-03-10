@@ -40,6 +40,10 @@ type model struct {
 	snoozing    bool
 	snoozeInput string
 
+	// Edit-time mode
+	editing   bool
+	editInput string
+
 	// Month view cursor (1-based day of month)
 	monthCursorDay int
 
@@ -99,6 +103,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.snoozing {
 			return m.handleSnoozeInput(msg)
+		}
+
+		if m.editing {
+			return m.handleEditInput(msg)
 		}
 
 		return m.handleKeypress(msg)
@@ -203,6 +211,13 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
 			m.snoozing = true
 			m.snoozeInput = ""
+		}
+		return m, nil
+
+	case "e":
+		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
+			m.editing = true
+			m.editInput = ""
 		}
 		return m, nil
 
@@ -367,6 +382,44 @@ func (m model) handleSnoozeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m model) handleEditInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.editInput != "" {
+			t, err := nlp.ParseDate(m.editInput)
+			if err != nil {
+				m.err = err
+			} else {
+				tk := m.allTasks[m.cursor]
+				if err := m.svc.SetDueAt(tk.ID, t); err != nil {
+					m.err = err
+				}
+			}
+			m.refreshData()
+		}
+		m.editing = false
+		m.editInput = ""
+		return m, nil
+
+	case "esc":
+		m.editing = false
+		m.editInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.editInput) > 0 {
+			m.editInput = m.editInput[:len(m.editInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.String()) == 1 {
+			m.editInput += msg.String()
+		}
+		return m, nil
+	}
+}
+
 func (m model) View() string {
 	if m.showHelp {
 		return renderHelp(m)
@@ -399,6 +452,10 @@ func renderFooter(m model) string {
 		return fmt.Sprintf("  snooze for: %s█  (e.g. 1h, 30m, 2 hours)", m.snoozeInput)
 	}
 
+	if m.editing {
+		return fmt.Sprintf("  new deadline: %s█  (e.g. friday 3pm, tomorrow, march 15)", m.editInput)
+	}
+
 	viewIndicator := "[d]ay [w]eek [m]onth"
 	switch m.viewMode {
 	case dayView:
@@ -409,7 +466,7 @@ func renderFooter(m model) string {
 		viewIndicator = "[d]ay [w]eek [M]onth"
 	}
 
-	keys := "j/k:move  space:done  a:add  s:snooze  x:delete  h/l:nav  t:today  ?:help  q:quit"
+	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  h/l:nav  t:today  ?:help  q:quit"
 	if m.viewMode == monthView {
 		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  t:today  ?:help  q:quit"
 	}
@@ -436,6 +493,7 @@ func renderHelp(m model) string {
   Actions
     space       Complete task
     a           Add new task
+    e           Edit deadline
     s           Snooze task
     x / delete  Delete task
     ?           Toggle help

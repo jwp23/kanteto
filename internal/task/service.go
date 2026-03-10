@@ -184,6 +184,19 @@ func (svc *Service) MarkReminded(id string) error {
 	return svc.repo.MarkReminded(id)
 }
 
+// SetDueAt updates a task's deadline and recomputes RemindAt.
+func (svc *Service) SetDueAt(id string, dueAt time.Time) error {
+	t, err := svc.repo.Get(id)
+	if err != nil {
+		return err
+	}
+	t.DueAt = &dueAt
+	remind := dueAt.Add(-svc.leadTime)
+	t.RemindAt = &remind
+	t.Reminded = false
+	return svc.repo.Update(t)
+}
+
 // Update saves changes to a task.
 func (svc *Service) Update(t Task) error {
 	return svc.repo.Update(t)

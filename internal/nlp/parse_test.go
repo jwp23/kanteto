@@ -29,6 +29,14 @@ func TestParseDate(t *testing.T) {
 		{"this friday", time.Date(2026, 3, 6, 23, 59, 0, 0, time.Local)},
 		{"monday", time.Date(2026, 3, 9, 23, 59, 0, 0, time.Local)},
 		{"this mon", time.Date(2026, 3, 9, 23, 59, 0, 0, time.Local)},
+		// Bare times without "at" keyword (kanteto-ejz.1)
+		{"3pm", time.Date(2026, 3, 3, 15, 0, 0, 0, time.Local)},
+		{"today 4pm", time.Date(2026, 3, 3, 16, 0, 0, 0, time.Local)},
+		{"tomorrow 9am", time.Date(2026, 3, 4, 9, 0, 0, 0, time.Local)},
+		{"friday 12pm", time.Date(2026, 3, 6, 12, 0, 0, 0, time.Local)},
+		{"march 10 5pm", time.Date(2026, 3, 10, 17, 0, 0, 0, time.Local)},
+		{"12am", time.Date(2026, 3, 3, 0, 0, 0, 0, time.Local)},
+		{"12pm", time.Date(2026, 3, 3, 12, 0, 0, 0, time.Local)},
 	}
 
 	for _, tt := range tests {
@@ -89,6 +97,12 @@ func TestExtractDeadline(t *testing.T) {
 		{"buy groceries", "buy groceries", false},
 		{"meeting at 3pm", "meeting", true},
 		{"just a title", "just a title", false},
+		// Trailing date expressions without markers (kanteto-ejz.2)
+		{"review doc Friday 12pm", "review doc", true},
+		{"review doc friday", "review doc", true},
+		{"call mom tomorrow 9am", "call mom", true},
+		{"fix bug march 10 5pm", "fix bug", true},
+		{"friday", "friday", false},
 	}
 
 	for _, tt := range tests {

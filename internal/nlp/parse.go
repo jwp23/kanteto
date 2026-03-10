@@ -29,9 +29,10 @@ var (
 		"sat": time.Saturday,
 	}
 
-	timeRe    = regexp.MustCompile(`(?i)at\s+(\d{1,2})(:\d{2})?\s*(am|pm)?`)
-	isoDateRe = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})$`)
-	slashRe   = regexp.MustCompile(`^(\d{1,2})/(\d{1,2})$`)
+	timeRe     = regexp.MustCompile(`(?i)at\s+(\d{1,2})(:\d{2})?\s*(am|pm)?`)
+	bareTimeRe = regexp.MustCompile(`(?i)\b(\d{1,2})(:\d{2})?\s*(am|pm)\b`)
+	isoDateRe  = regexp.MustCompile(`^(\d{4})-(\d{2})-(\d{2})$`)
+	slashRe    = regexp.MustCompile(`^(\d{1,2})/(\d{1,2})$`)
 )
 
 // ParseDate parses a natural language date string relative to time.Now().
@@ -55,21 +56,16 @@ func ParseDateRelativeTo(s string, now time.Time) (time.Time, error) {
 
 	hour, min := 23, 59
 	if m := timeRe.FindStringSubmatch(lower); m != nil {
-		h, _ := strconv.Atoi(m[1])
-		mn := 0
-		if m[2] != "" {
-			mn, _ = strconv.Atoi(m[2][1:])
-		}
-		if strings.EqualFold(m[3], "pm") && h < 12 {
-			h += 12
-		} else if strings.EqualFold(m[3], "am") && h == 12 {
-			h = 0
-		}
+		h, mn := parseTimeMatch(m)
 		hour, min = h, mn
-		// Strip the time part for date parsing
 		lower = strings.TrimSpace(timeRe.ReplaceAllString(lower, ""))
-
-		// If only a time was given (e.g., "at 3pm"), treat as today
+		if lower == "" {
+			return time.Date(now.Year(), now.Month(), now.Day(), h, mn, 0, 0, now.Location()), nil
+		}
+	} else if m := bareTimeRe.FindStringSubmatch(lower); m != nil {
+		h, mn := parseTimeMatch(m)
+		hour, min = h, mn
+		lower = strings.TrimSpace(bareTimeRe.ReplaceAllString(lower, ""))
 		if lower == "" {
 			return time.Date(now.Year(), now.Month(), now.Day(), h, mn, 0, 0, now.Location()), nil
 		}
@@ -166,6 +162,20 @@ func ParseDuration(s string) (time.Duration, error) {
 	return 0, fmt.Errorf("unable to parse duration: %q", s)
 }
 
+func parseTimeMatch(m []string) (int, int) {
+	h, _ := strconv.Atoi(m[1])
+	mn := 0
+	if m[2] != "" {
+		mn, _ = strconv.Atoi(m[2][1:])
+	}
+	if strings.EqualFold(m[3], "pm") && h < 12 {
+		h += 12
+	} else if strings.EqualFold(m[3], "am") && h == 12 {
+		h = 0
+	}
+	return h, mn
+}
+
 func nextWeekday(now time.Time, wd time.Weekday, hour, min int) time.Time {
 	daysAhead := int(wd) - int(now.Weekday())
 	if daysAhead <= 0 {
@@ -232,6 +242,25 @@ func ExtractDeadline(input string) (title string, dueAt *time.Time) {
 			continue
 		}
 
+		t, err := ParseDate(candidateDate)
+		if err == nil {
+			return candidateTitle, &t
+		}
+	}
+
+	// Fallback: scan trailing 1-4 words as a possible date expression.
+	words := strings.Fields(input)
+	maxScan := 4
+	if len(words)-1 < maxScan {
+		maxScan = len(words) - 1
+	}
+	for n := maxScan; n >= 1; n-- {
+		splitIdx := len(words) - n
+		candidateTitle := strings.Join(words[:splitIdx], " ")
+		candidateDate := strings.Join(words[splitIdx:], " ")
+		if candidateTitle == "" {
+			continue
+		}
 		t, err := ParseDate(candidateDate)
 		if err == nil {
 			return candidateTitle, &t

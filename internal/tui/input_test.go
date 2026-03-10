@@ -117,6 +117,92 @@ func TestSnoozeInput_Submit(t *testing.T) {
 	}
 }
 
+func TestEditInput_Submit(t *testing.T) {
+	m := testDayModel(t)
+	now := time.Now()
+
+	due := now.Add(5 * time.Minute)
+	tk, err := m.svc.Add("edit me", &due)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.refreshData()
+
+	if len(m.allTasks) == 0 {
+		t.Fatal("expected at least 1 task")
+	}
+
+	// Enter edit mode
+	got := sendKey(m, "e").(model)
+	if !got.editing {
+		t.Fatal("e should enter edit mode")
+	}
+
+	// Type "tomorrow"
+	for _, c := range "tomorrow" {
+		got = sendKey(got, string(c)).(model)
+	}
+
+	got = sendSpecialKey(got, tea.KeyEnter).(model)
+
+	if got.editing {
+		t.Error("editing should be false after enter")
+	}
+
+	updated, err := m.svc.Get(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.DueAt == nil {
+		t.Fatal("DueAt should not be nil")
+	}
+	if updated.DueAt.Day() == due.Day() && updated.DueAt.Month() == due.Month() {
+		t.Error("DueAt should have changed to tomorrow")
+	}
+}
+
+func TestEditInput_Escape(t *testing.T) {
+	m := testDayModel(t)
+	now := time.Now()
+
+	due := now.Add(5 * time.Minute)
+	tk, err := m.svc.Add("no edit", &due)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.refreshData()
+
+	got := sendKey(m, "e").(model)
+	got = sendKey(got, "f").(model)
+	got = sendKey(got, "r").(model)
+
+	got = sendSpecialKey(got, tea.KeyEscape).(model)
+
+	if got.editing {
+		t.Error("editing should be false after escape")
+	}
+	if got.editInput != "" {
+		t.Errorf("editInput should be empty, got %q", got.editInput)
+	}
+
+	updated, err := m.svc.Get(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.DueAt.Equal(due) {
+		t.Errorf("DueAt should be unchanged, was %v now %v", due, updated.DueAt)
+	}
+}
+
+func TestEditInput_NoTasks(t *testing.T) {
+	m := testDayModel(t)
+
+	got := sendKey(m, "e").(model)
+	if got.editing {
+		t.Error("e should not enter edit mode with no tasks")
+	}
+}
+
 func TestSnoozeInput_Escape(t *testing.T) {
 	m := testDayModel(t)
 	now := time.Now()
