@@ -32,8 +32,13 @@ func renderWeekView(m model) string {
 	for i := 0; i < 7; i++ {
 		d := startOfWeek.AddDate(0, 0, i)
 		label := d.Format("Mon 1/2")
+		if i == m.weekCursorDay {
+			label = "[" + label + "]"
+		}
 		style := lipgloss.NewStyle().Width(colWidth).Bold(true)
-		if d.Year() == now.Year() && d.YearDay() == now.YearDay() {
+		if i == m.weekCursorDay {
+			style = style.Background(lipgloss.Color("236")).Foreground(lipgloss.Color("15"))
+		} else if d.Year() == now.Year() && d.YearDay() == now.YearDay() {
 			style = style.Foreground(lipgloss.Color("14"))
 		}
 		headers = append(headers, style.Render(label))

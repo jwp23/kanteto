@@ -63,6 +63,13 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 - **Story 12:** As a user, I want to re-parse existing undated tasks so that tasks created before the NLP fix get their deadlines detected retroactively.
     * Feature name: `reparse_migration`
 
+- **Story 13:** As a user, I want to move a cursor across individual days in week view so that I can inspect tasks due on a specific day without leaving the TUI.
+    * Feature name: `week_view_day_cursor`
+    * `j/k` and `left/right` arrow keys move the column cursor across the 7 days (Sunday through Saturday).
+    * `h/l` advance or retreat by one full week, keeping the cursor on the same day-of-week position.
+    * Pressing `Enter` on a highlighted column drills into day view for that date — consistent with the existing month-view drill-down behavior described in Story 8.
+    * The active column is highlighted with brackets and inverted styling.
+
 ---
 
 ## 3. The Look and Feel
@@ -71,7 +78,7 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 - **Main Colors:** Default terminal colors with urgency gradient (white -> yellow -> amber -> red) for approaching deadlines. Overdue tasks are bold red. Completed tasks are dimmed with a checkmark.
 - **Key Screens:**
   - **Day View (default):** Header bar with date and current view indicator. Three sections: OVERDUE (red), TODAY, UPCOMING. Keybinding footer.
-  - **Week View:** 7-column grid (Sunday-Saturday). Current day column highlighted. Tasks listed under each day.
+  - **Week View:** 7-column grid (Sunday-Saturday). Current day column highlighted by default. `j/k` or `left/right` moves a cursor column across the 7 days; `h/l` shifts the entire week forward or backward. Press `Enter` on any column to drill into day view for that date.
   - **Month View:** Calendar grid with day numbers and task counts. Current day highlighted. Press Enter on a day to drill into day view.
   - **Help Overlay:** `?` shows all keybindings in a centered overlay.
   - **Inline Add Prompt:** `a` opens a text input at the bottom for quick task entry with NLP parsing.

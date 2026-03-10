@@ -44,6 +44,9 @@ type model struct {
 	editing   bool
 	editInput string
 
+	// Week view cursor (0=Sunday, 6=Saturday)
+	weekCursorDay int
+
 	// Month view cursor (1-based day of month)
 	monthCursorDay int
 
@@ -165,6 +168,9 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "j", "down":
+		if m.viewMode == weekView {
+			return m.weekCursorMove(1), nil
+		}
 		if m.viewMode == monthView {
 			return m.monthCursorMove(7), nil
 		}
@@ -174,6 +180,9 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "k", "up":
+		if m.viewMode == weekView {
+			return m.weekCursorMove(-1), nil
+		}
 		if m.viewMode == monthView {
 			return m.monthCursorMove(-7), nil
 		}
@@ -228,6 +237,7 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "w":
 		m.viewMode = weekView
+		m.weekCursorDay = int(m.viewDate.Weekday())
 		m.refreshData()
 		return m, nil
 
@@ -238,12 +248,18 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "left":
+		if m.viewMode == weekView {
+			return m.weekCursorMove(-1), nil
+		}
 		if m.viewMode == monthView {
 			return m.monthCursorMove(-1), nil
 		}
 		return m.timeNav(-1), nil
 
 	case "right":
+		if m.viewMode == weekView {
+			return m.weekCursorMove(1), nil
+		}
 		if m.viewMode == monthView {
 			return m.monthCursorMove(1), nil
 		}
@@ -256,6 +272,9 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.timeNav(1), nil
 
 	case "enter":
+		if m.viewMode == weekView {
+			return m.weekDrillDown(), nil
+		}
 		if m.viewMode == monthView {
 			return m.monthDrillDown(), nil
 		}
@@ -284,6 +303,26 @@ func (m model) timeNav(dir int) model {
 		m.viewDate = m.viewDate.AddDate(0, dir, 0)
 		m.monthCursorDay = min(m.monthCursorDay, daysInMonth(m.viewDate))
 	}
+	m.refreshData()
+	return m
+}
+
+func (m model) weekCursorMove(delta int) model {
+	newDay := m.weekCursorDay + delta
+	if newDay < 0 {
+		newDay = 0
+	} else if newDay > 6 {
+		newDay = 6
+	}
+	m.weekCursorDay = newDay
+	return m
+}
+
+func (m model) weekDrillDown() model {
+	weekday := m.viewDate.Weekday()
+	startOfWeek := m.viewDate.AddDate(0, 0, -int(weekday))
+	m.viewDate = startOfWeek.AddDate(0, 0, m.weekCursorDay)
+	m.viewMode = dayView
 	m.refreshData()
 	return m
 }
@@ -467,6 +506,9 @@ func renderFooter(m model) string {
 	}
 
 	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  h/l:nav  t:today  ?:help  q:quit"
+	if m.viewMode == weekView {
+		keys = "j/k:day  ←/→:day  enter:open  h/l:week  a:add  t:today  ?:help  q:quit"
+	}
 	if m.viewMode == monthView {
 		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  t:today  ?:help  q:quit"
 	}
@@ -478,12 +520,12 @@ func renderHelp(m model) string {
   Kanteto — Keyboard Shortcuts
 
   Navigation
-    j / ↓       Move down (week in month view)
-    k / ↑       Move up (week in month view)
-    ← / →       Move by day in month view
+    j / ↓       Move down (day in week view, week in month view)
+    k / ↑       Move up (day in week view, week in month view)
+    ← / →       Move by day in week/month view
     h / l       Previous/next day, week, or month
     t           Jump to today
-    enter       Open selected day (month view)
+    enter       Open selected day (week/month view)
 
   Views
     d           Day view
