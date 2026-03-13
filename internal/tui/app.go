@@ -53,6 +53,9 @@ type model struct {
 	// Pre-fetched tasks for month view (keyed by day of month)
 	monthTasks map[int][]task.Task
 
+	// Midnight detection
+	lastDate int // YearDay of the last known date
+
 	// Help overlay
 	showHelp bool
 
@@ -64,19 +67,28 @@ type model struct {
 }
 
 type refreshMsg struct{}
+type tickMsg time.Time
 
 // New creates and returns the Bubble Tea program.
 func New(svc *task.Service) *tea.Program {
+	now := time.Now()
 	m := model{
 		svc:      svc,
 		viewMode: dayView,
-		viewDate: time.Now(),
+		viewDate: now,
+		lastDate: now.YearDay(),
 	}
 	return tea.NewProgram(m, tea.WithAltScreen())
 }
 
 func (m model) Init() tea.Cmd {
-	return m.loadTasks
+	return tea.Batch(m.loadTasks, tickEvery(time.Minute))
+}
+
+func tickEvery(d time.Duration) tea.Cmd {
+	return tea.Every(d, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func (m model) loadTasks() tea.Msg {
@@ -93,6 +105,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshMsg:
 		m.refreshData()
 		return m, nil
+
+	case tickMsg:
+		now := time.Time(msg)
+		if now.YearDay() != m.lastDate || now.Year() != m.viewDate.Year() {
+			m.lastDate = now.YearDay()
+			oldToday := time.Date(m.viewDate.Year(), m.viewDate.Month(), m.viewDate.Day(), 0, 0, 0, 0, m.viewDate.Location())
+			yesterday := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, now.Location())
+			if oldToday.Equal(yesterday) {
+				m.viewDate = now
+			}
+			m.refreshData()
+		}
+		return m, tickEvery(time.Minute)
 
 	case tea.KeyMsg:
 		if m.showHelp {
