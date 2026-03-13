@@ -44,6 +44,16 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ---
 
+## [0.2.6] - 2026-03-13
+
+### Fixed
+
+- TUI date not updating when left open overnight: added 1-minute tick that detects midnight crossover and auto-advances viewDate if the user was viewing "today" (`kanteto-9fe`).
+
+### Issues Closed
+
+- `kanteto-9fe`
+
 ## [0.2.5] - 2026-03-10
 
 ### Added
