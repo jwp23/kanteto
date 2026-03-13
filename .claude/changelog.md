@@ -44,6 +44,19 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ---
 
+## [0.2.5] - 2026-03-10
+
+### Added
+
+- Week view day cursor navigation (Story 13): `j/k` and arrow keys move a cursor across the 7 day columns, `Enter` drills into day view for the selected day, `h/l` still shifts by week (`kanteto-477`).
+- Bracket + inverted-style highlight on selected week column header.
+- Week-view-specific footer keybindings and updated help overlay.
+- 8 new week cursor tests mirroring month_test.go pattern (`kanteto-2w9`).
+
+### Issues Closed
+
+- `kanteto-477`, `kanteto-9h5`, `kanteto-cuw`, `kanteto-61x`, `kanteto-2w9`
+
 ## [0.2.4] - 2026-03-06
 
 ### Fixed
