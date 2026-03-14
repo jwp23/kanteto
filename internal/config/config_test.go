@@ -30,7 +30,7 @@ func TestLoad_FromFile(t *testing.T) {
 	}
 
 	content := `reminder_lead_time = "30m"
-sound_file = "/usr/share/sounds/beep.ogg"
+active_profile = "work"
 `
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -43,8 +43,8 @@ sound_file = "/usr/share/sounds/beep.ogg"
 	if cfg.ReminderLeadTime.String() != "30m0s" {
 		t.Errorf("ReminderLeadTime = %v, want 30m", cfg.ReminderLeadTime)
 	}
-	if cfg.SoundFile != "/usr/share/sounds/beep.ogg" {
-		t.Errorf("SoundFile = %q, want /usr/share/sounds/beep.ogg", cfg.SoundFile)
+	if cfg.ActiveProfile != "work" {
+		t.Errorf("ActiveProfile = %q, want work", cfg.ActiveProfile)
 	}
 }
 

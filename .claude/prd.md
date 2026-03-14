@@ -7,11 +7,11 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 ## 1. The Big Picture
 
 - **Project Name:** Kanteto
-- **One-Sentence Summary:** A CLI and TUI tool for tracking small tasks and promises that are too small for tickets but still need to get done on time.
+- **One-Sentence Summary:** A TUI tool for tracking small tasks and promises that are too small for tickets but still need to get done on time. The only CLI subcommand is `kt migrate` for one-time SQLite→Dolt migration.
 - **Who is this for?** Anyone who makes small commitments throughout the day — "I'll send that by 4pm," "remind me to follow up Friday" — and needs a fast, keyboard-driven way to track them from the terminal.
 - **What this app will NOT do:**
   - It will not replace full project management tools (Jira, Linear, Asana).
-  - It will not send email, Slack, or push notifications — reminders are audible terminal sounds only.
+  - It will not send any notifications or reminders.
   - It will not have a web or mobile interface.
 
 ---
@@ -19,16 +19,13 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 ## 2. The Features
 
 - **Story 1:** As a user, I want to add a task with a natural language deadline so that I can quickly capture commitments without thinking about date formats.
-  - `kt add "Call dentist" --by "march 11"`
-  - `kt add "Buy groceries"` (no deadline)
+  - Press `a` in the TUI to open the inline add prompt.
+  - Type `Call dentist by march 11` or `Buy groceries` (no deadline).
 
 - **Story 2:** As a user, I want to create recurring tasks so that I can track things I do on a regular schedule.
-  - `kt add "Send weekly update" --every "weekdays at 4pm"`
-  - `kt add "Review PRs" --every "friday at 5pm"`
+  - Inline add supports recurrence patterns: `Send weekly update every weekdays at 4pm`.
 
-- **Story 3:** As a user, I want to hear an audible reminder when a task is due so that I don't miss my commitments.
-  - Background daemon plays a sound via `afplay` (macOS) / `paplay` (Linux).
-  - Configurable lead time (e.g., remind 15 minutes before due).
+- **Story 3:** ~~Removed.~~ The audible reminder daemon was removed in v0.3.0.
 
 - **Story 4:** As a user, I want to view my tasks by day, week, or month so that I can plan my time across different horizons.
   - Day view: OVERDUE / TODAY / UPCOMING sections.
@@ -36,10 +33,10 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
   - Month view: Calendar grid with task counts per day.
 
 - **Story 5:** As a user, I want to navigate forward and backward in time so that I can see what's coming up or review past tasks.
-  - `h/l` or arrow keys in TUI; `--next`/`--prev` flags in CLI.
+  - `h/l` or arrow keys in TUI.
 
 - **Story 6:** As a user, I want to mark tasks as done, snooze them, or delete them so that I can manage my list quickly.
-  - `kt done <id>`, `kt snooze <id> --for "1 hour"`, `kt rm <id>`
+  - `space` to complete, `s` to snooze, `x` to delete in TUI.
   - Completing a recurring task advances it to the next occurrence.
 
 - **Story 7:** As a user, I want tasks to visually shift from white to red as their deadline approaches so that I can see urgency at a glance.
@@ -73,28 +70,21 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 
 - **Story 14:** As a user, I want to tag tasks so that I can categorize and filter them.
     * Feature name: `task_tags`
-    * `kt add "task" --tag work --tag urgent` — create with tags
-    * `kt list --tag work` — filter by tag
-    * `kt tag <id> <tag>` / `kt untag <id> <tag>` — add/remove tags
-    * Tags display in dim brackets in TUI day view
+    * Tags are managed via the TUI.
+    * Tags display in dim brackets in TUI day view.
 
 - **Story 15:** As a user, I want to switch between profiles (e.g., "work" vs "personal") so that I can scope my task views.
     * Feature name: `task_profiles`
-    * `kt profile use work` — switch active profile
-    * `kt profile list` / `kt profile show` — manage profiles
-    * `kt --profile work list` — one-off override
-    * TUI shows active profile in header for non-default profiles
-    * Reminders fire for ALL profiles regardless of active profile
+    * Profile switching is managed via config (`active_profile` in `config.toml`).
+    * TUI shows active profile in header for non-default profiles.
 
 ### Sync
 
 - **Story 16:** As a user, I want to sync my tasks across machines using Dolt so that I have the same task list everywhere.
     * Feature name: `dolt_sync`
-    * Uses Dolt embedded driver (`github.com/dolthub/driver`) — no server needed
-    * `kt sync push` / `kt sync pull` — push/pull to remote
-    * `kt sync remote add <name> <url>` / `kt sync remote list` — manage remotes
-    * `kt migrate dolt` — migrate from SQLite to Dolt backend
-    * Backend selection via config: `backend = "sqlite"` or `backend = "dolt"`
+    * Kanteto stores data in a Dolt repository at `~/.local/share/kanteto/`.
+    * Sync is performed via the `dolt` CLI directly in the data directory (no `kt sync` command).
+    * `kt migrate` — one-time migration from SQLite to Dolt backend.
 
 ---
 

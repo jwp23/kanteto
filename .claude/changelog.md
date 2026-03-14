@@ -57,12 +57,9 @@ This ensures transparency and traceability for all AI-executed workflows.
 ### Added
 
 - `internal/sync/` package: thin wrapper around `dolt add/commit/push/pull/remote` commands.
-- `kt sync push` — commit and push tasks to Dolt remote.
-- `kt sync pull` — pull tasks from Dolt remote.
-- `kt sync remote add/list` — manage Dolt remotes.
 - `kt migrate` — one-time migration from SQLite (`kanteto.db`) to Dolt. Reads all tasks including completed, writes to `dolt/` subdirectory, creates initial commit.
-- 78 new tests across doltstore, sync, sync CLI, and migration (225 total, up from 147).
-- README: prerequisites section, sync/tag/profile/migrate command docs.
+- 78 new tests across doltstore, sync, and migration (225 total, up from 147).
+- README: prerequisites section, migrate command docs, Dolt sync instructions.
 - Updated infra.md and sbom.md for Dolt architecture.
 
 ### Removed

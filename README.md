@@ -2,7 +2,7 @@
 
 *kanteto* (κάντε το) — "Do It" in Greek.
 
-A CLI and TUI tool for tracking small tasks and promises that are too small
+A TUI tool for tracking small tasks and promises that are too small
 for tickets but still need to get done on time.
 
 > **Note:** Kanteto is under active development. Features may change between
@@ -33,105 +33,9 @@ go build -o kt ./cmd/kt
 ## Quick Start
 
 ```sh
-kt add "Call dentist" --by "march 11"
-kt add "Buy groceries"
-kt list
-kt done <id>
 kt                    # launch the TUI
+kt migrate            # one-time SQLite→Dolt migration
 ```
-
-## CLI Commands
-
-### `kt add`
-
-Add a task with an optional deadline or recurrence.
-
-```sh
-kt add "Call dentist" --by "tomorrow at 3pm"
-kt add "Send weekly update" --every "weekdays at 4pm"
-```
-
-| Flag | Description |
-|------|-------------|
-| `--by <date>` | Natural language deadline (`tomorrow`, `march 11`, `next friday`, `in 5 minutes`, `at 3pm`) |
-| `--every <pattern>` | Recurrence (`daily at 9am`, `weekdays at 4pm`, `friday at 5pm`) |
-
-### `kt list`
-
-Show tasks grouped into OVERDUE, TODAY, UPCOMING, and ANYTIME sections.
-
-```sh
-kt list
-kt list --next   # shift forward one day
-kt list --prev   # shift back one day
-```
-
-### `kt done <id>`
-
-Mark a task as complete. Recurring tasks advance to the next occurrence.
-
-### `kt snooze <id>`
-
-Postpone a task's deadline (default: 1 hour).
-
-```sh
-kt snooze <id> --for "2 hours"
-```
-
-### `kt rm <id>`
-
-Permanently delete a task.
-
-### `kt tag <id> <tag>` / `kt untag <id> <tag>`
-
-Add or remove tags on a task.
-
-```sh
-kt tag abc123 work
-kt untag abc123 work
-kt list --tag work       # filter by tag
-```
-
-### `kt profile`
-
-Manage task profiles to scope views (e.g., work vs personal).
-
-```sh
-kt profile use work      # switch active profile
-kt profile list          # show all profiles
-kt profile show          # show active profile
-kt add "Task" --profile personal   # override for one command
-```
-
-### `kt sync`
-
-Sync tasks to a Dolt remote (GitHub, DoltHub, etc.).
-
-```sh
-kt sync remote add origin https://doltremoteapi.dolthub.com/user/tasks
-kt sync push             # commit and push to remote
-kt sync pull             # pull from remote
-kt sync remote list      # show configured remotes
-```
-
-### `kt migrate`
-
-One-time migration from an existing SQLite database to Dolt.
-
-```sh
-kt migrate               # reads kanteto.db, writes to dolt/
-```
-
-### `kt daemon`
-
-Start the background reminder daemon. Checks for due tasks every 30 seconds
-and plays an audible alert.
-
-```sh
-kt daemon &
-```
-
-Task IDs support prefix matching — type just enough characters to be unambiguous.
 
 ## TUI
 
@@ -160,17 +64,70 @@ Run `kt` with no arguments to launch the interactive terminal UI.
 |-----|--------|
 | `space` | Complete task |
 | `a` | Add task inline (supports natural language: `Call dentist by march 11`) |
+| `s` | Snooze task |
+| `e` | Edit task deadline |
 | `x` | Delete task |
 | `?` | Help overlay |
 | `q` | Quit |
+
+Task IDs support prefix matching — type just enough characters to be unambiguous.
+
+## `kt migrate`
+
+One-time migration from an existing SQLite database to Dolt.
+
+```sh
+kt migrate               # reads kanteto.db, writes to dolt/
+```
+
+## Syncing Across Machines
+
+Kanteto stores its data in a Dolt repository at `~/.local/share/kanteto/`.
+To sync tasks across machines, use the `dolt` CLI directly in the data directory.
+
+Dolt supports several remote backends — you are not limited to DoltHub:
+
+| Remote type | URL format |
+|-------------|------------|
+| Git (GitHub, GitLab, etc.) | `git@github.com:user/repo.git` or `https://github.com/user/repo.git` |
+| DoltHub | `https://doltremoteapi.dolthub.com/user/repo` |
+| Filesystem | `/path/to/remote/dir` |
+| AWS (S3 + DynamoDB) | `aws://[table:bucket]/db` |
+| GCS | `gs://bucket/path` |
+
+### Initial remote setup
+
+First, create the remote repository on your hosting service (e.g., create a
+repo on GitHub or DoltHub). Then add it as a remote:
+
+```sh
+cd ~/.local/share/kanteto
+dolt remote add origin git@github.com:<user>/<repo>.git
+dolt push origin main
+```
+
+### Ongoing sync
+
+```sh
+cd ~/.local/share/kanteto
+dolt push origin main        # push local changes to remote
+dolt pull origin              # pull remote changes
+```
+
+### Useful commands
+
+```sh
+cd ~/.local/share/kanteto
+dolt remote -v               # list configured remotes
+dolt status                  # check for uncommitted changes
+dolt log                     # view commit history
+```
 
 ## Configuration
 
 Kanteto uses an optional TOML config file at `~/.config/kanteto/config.toml`:
 
 ```toml
-reminder_lead_time = "15m"    # how far before due time to alert
-sound_file = "/path/to/alert.wav"
 active_profile = "default"   # current profile
 ```
 
