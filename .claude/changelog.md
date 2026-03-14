@@ -65,6 +65,12 @@ This ensures transparency and traceability for all AI-executed workflows.
 - README: prerequisites section, sync/tag/profile/migrate command docs.
 - Updated infra.md and sbom.md for Dolt architecture.
 
+### Removed
+
+- CLI subcommands: `add`, `done`, `rm`, `edit`, `list`, `snooze`, `reparse`, `tag`, `profile`, `sync`, `daemon` (all task management now via TUI; only `kt migrate` remains).
+- `internal/daemon/` package (orphaned after `cmd/daemon.go` removal).
+- `rawStore` variable and profile/config wiring from `cmd/root.go`.
+
 ### Issues Closed
 
 - `kanteto-1wy` (DoltStore implementation)
