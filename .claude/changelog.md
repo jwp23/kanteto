@@ -44,6 +44,36 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ---
 
+## [0.3.0] - 2026-03-14
+
+### Changed
+
+- **BREAKING:** Replaced SQLite with Dolt CLI as sole datastore. Kanteto now requires `dolt` (v1.81.10+) and `git` on PATH.
+- Store implementation (`internal/store/`) shells out to `dolt sql -q` with `-r json` for queries. Schema uses MySQL dialect (VARCHAR, TINYINT(1), JSON type).
+- TUI `refreshData()` refactored from 4 queries to 1 `ListAll` call with in-memory bucketing — critical for Dolt CLI latency.
+- `rawStore` type changed from `*store.Store` to `task.Repository` interface.
+- `ListProfiles()` added to `task.Repository` interface and `ProfileStore`.
+
+### Added
+
+- `internal/sync/` package: thin wrapper around `dolt add/commit/push/pull/remote` commands.
+- `kt sync push` — commit and push tasks to Dolt remote.
+- `kt sync pull` — pull tasks from Dolt remote.
+- `kt sync remote add/list` — manage Dolt remotes.
+- `kt migrate` — one-time migration from SQLite (`kanteto.db`) to Dolt. Reads all tasks including completed, writes to `dolt/` subdirectory, creates initial commit.
+- 78 new tests across doltstore, sync, sync CLI, and migration (225 total, up from 147).
+- README: prerequisites section, sync/tag/profile/migrate command docs.
+- Updated infra.md and sbom.md for Dolt architecture.
+
+### Issues Closed
+
+- `kanteto-1wy` (DoltStore implementation)
+- `kanteto-1wd` (TUI single-fetch refactor)
+- `kanteto-yzq` (Sync operations and CLI)
+- `kanteto-sgo` (SQLite to Dolt migration)
+- `kanteto-6k1` (Documentation updates)
+- `kanteto-ona` (Phase 0 Dolt driver spike — retroactively closed)
+
 ## [0.2.6] - 2026-03-13
 
 ### Fixed
