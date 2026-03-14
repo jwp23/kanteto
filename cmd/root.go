@@ -13,7 +13,6 @@ import (
 
 var (
 	svc             *task.Service
-	rawStore        task.Repository
 	cfg             config.Config
 	profileOverride string
 )
@@ -55,8 +54,6 @@ func initService() error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	rawStore = s
-
 	var loadErr error
 	cfg, loadErr = config.Load()
 	if loadErr != nil {

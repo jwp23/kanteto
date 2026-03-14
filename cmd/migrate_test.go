@@ -17,6 +17,13 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func skipIfNoDolt(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("dolt"); err != nil {
+		t.Skip("dolt not found on PATH, skipping integration test")
+	}
+}
+
 func createSQLiteDB(t *testing.T, dbPath string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite", dbPath)
