@@ -21,6 +21,7 @@ type Repository interface {
 	ListUndated() ([]Task, error)
 	ListDueReminders() ([]Task, error)
 	MarkReminded(id string) error
+	ListProfiles() ([]string, error)
 }
 
 // Service provides business logic for task management.

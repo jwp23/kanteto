@@ -3,19 +3,19 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
+	"github.com/jwp23/kanteto/internal/store/doltstore"
 	"github.com/jwp23/kanteto/internal/task"
 	"github.com/jwp23/kanteto/internal/tui"
 	"github.com/spf13/cobra"
 )
 
 var (
-	svc            *task.Service
-	rawStore       *store.Store
-	cfg            config.Config
+	svc             *task.Service
+	rawStore        task.Repository
+	cfg             config.Config
 	profileOverride string
 )
 
@@ -52,8 +52,7 @@ func initService() error {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
-	dbPath := filepath.Join(dataDir, "kanteto.db")
-	s, err := store.New(dbPath)
+	s, err := doltstore.New(dataDir)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

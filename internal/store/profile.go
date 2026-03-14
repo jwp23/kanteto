@@ -91,6 +91,10 @@ func (ps *ProfileStore) MarkReminded(id string) error {
 	return ps.inner.MarkReminded(id)
 }
 
+func (ps *ProfileStore) ListProfiles() ([]string, error) {
+	return ps.inner.ListProfiles()
+}
+
 func filterProfile(tasks []task.Task, profile string) []task.Task {
 	var filtered []task.Task
 	for _, t := range tasks {
