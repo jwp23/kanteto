@@ -48,6 +48,9 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ### Added
 
+- TUI due-date alert: audible notification when a task's deadline passes while TUI is open. Tries `paplay`/`afplay`/`aplay` with configurable `sound_file`, falls back to terminal bell. One alert per tick, `alertedIDs` prevents re-firing (`kanteto-e0t`, `kanteto-5vl`, `kanteto-o6w`).
+- `AlertPlayer` interface + `NewSoundPlayer()` for testable sound playback (`kanteto-o6w`).
+- `SoundFile` config field in `config.toml` (`kanteto-5vl`).
 - TUI tag management keybindings: `t` to add tag, `T` to remove tag on selected task (`kanteto-dut`).
 - TUI reparse migration: `R` triggers confirmation flow to retroactively detect deadlines in undated tasks via `nlp.ExtractDeadline`. Preview count shown before executing (`kanteto-8rd`).
 - `Service.Reparse()` method with `ReparseResult{Updated, Total}` — scans undated tasks, strips title, sets DueAt (`kanteto-8rd`).
@@ -57,11 +60,15 @@ This ensures transparency and traceability for all AI-executed workflows.
 ### Changed
 
 - "Jump to today" keybinding reassigned from `t` to `.` (dot) — `t` now used for tag mode (`kanteto-dut`).
-- `tui.New()` signature now accepts optional `Syncer` parameter; `cmd/root.go` wired up with `sync.New(doltDir)` (`kanteto-3ol`).
+- `tui.New()` signature now accepts `AlertPlayer` parameter; `cmd/root.go` constructs `NewSoundPlayer(cfg.SoundFile)` (`kanteto-5vl`, `kanteto-o6w`).
+- Tick handler now always calls `refreshData()` and runs due-alert detection, not just on midnight crossing (`kanteto-5vl`).
 - Updated footer keybinding hints and help overlay for all new actions.
 
 ### Issues Closed
 
+- `kanteto-e0t` (task): TDD tests for due-alert detection logic
+- `kanteto-5vl` (feature): Track alerted task IDs and detect newly-due tasks on tick
+- `kanteto-o6w` (feature): Wire sound output for due alerts
 - `kanteto-dut` (feature): Tag management TUI keybindings
 - `kanteto-8rd` (feature): Reparse migration TUI + service method
 - `kanteto-3ol` (feature): Dolt sync push/pull TUI keybindings
