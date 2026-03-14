@@ -2,8 +2,6 @@ package task
 
 import (
 	"time"
-
-	"github.com/jwp23/kanteto/internal/config"
 )
 
 // Repository defines the storage contract for tasks.
@@ -19,29 +17,20 @@ type Repository interface {
 	ListOverdue() ([]Task, error)
 	ListOverdueAsOf(asOf time.Time) ([]Task, error)
 	ListUndated() ([]Task, error)
-	ListDueReminders() ([]Task, error)
-	MarkReminded(id string) error
 	ListProfiles() ([]string, error)
 }
 
 // Service provides business logic for task management.
 type Service struct {
-	repo     Repository
-	leadTime time.Duration
+	repo Repository
 }
 
-// NewService creates a new task service with default reminder lead time.
+// NewService creates a new task service.
 func NewService(repo Repository) *Service {
-	return &Service{repo: repo, leadTime: config.DefaultLeadTime}
-}
-
-// SetLeadTime configures the reminder lead time.
-func (svc *Service) SetLeadTime(d time.Duration) {
-	svc.leadTime = d
+	return &Service{repo: repo}
 }
 
 // Add creates a new task with an optional due date and tags.
-// If a due date is provided, RemindAt is auto-calculated based on lead time.
 func (svc *Service) Add(title string, dueAt *time.Time, tags ...string) (Task, error) {
 	if tags == nil {
 		tags = []string{}
@@ -52,11 +41,6 @@ func (svc *Service) Add(title string, dueAt *time.Time, tags ...string) (Task, e
 		DueAt:     dueAt,
 		Tags:      tags,
 		CreatedAt: time.Now(),
-	}
-
-	if dueAt != nil {
-		remind := dueAt.Add(-svc.leadTime)
-		t.RemindAt = &remind
 	}
 
 	if err := svc.repo.Create(t); err != nil {
@@ -103,12 +87,10 @@ func (svc *Service) AddRecurring(title, pattern, timeStr string) (Task, error) {
 		return Task{}, err
 	}
 
-	remind := nextDue.Add(-svc.leadTime)
 	t := Task{
 		ID:                NewID(),
 		Title:             title,
 		DueAt:             &nextDue,
-		RemindAt:          &remind,
 		CreatedAt:         time.Now(),
 		RecurrencePattern: pattern,
 		RecurrenceTime:    timeStr,
@@ -139,10 +121,7 @@ func (svc *Service) Complete(id string) error {
 		return err
 	}
 
-	remind := nextDue.Add(-svc.leadTime)
 	t.DueAt = &nextDue
-	t.RemindAt = &remind
-	t.Reminded = false
 	return svc.repo.Update(t)
 }
 
@@ -165,10 +144,7 @@ func (svc *Service) Snooze(id string, d time.Duration) error {
 		newDue = time.Now().Add(d)
 	}
 
-	remind := newDue.Add(-svc.leadTime)
 	t.DueAt = &newDue
-	t.RemindAt = &remind
-	t.Reminded = false
 	return svc.repo.Update(t)
 }
 
@@ -210,26 +186,13 @@ func (svc *Service) Get(id string) (Task, error) {
 	return svc.repo.Get(id)
 }
 
-// GetDueReminders returns tasks that need reminders right now.
-func (svc *Service) GetDueReminders() ([]Task, error) {
-	return svc.repo.ListDueReminders()
-}
-
-// MarkReminded marks a task's reminder as fired.
-func (svc *Service) MarkReminded(id string) error {
-	return svc.repo.MarkReminded(id)
-}
-
-// SetDueAt updates a task's deadline and recomputes RemindAt.
+// SetDueAt updates a task's deadline.
 func (svc *Service) SetDueAt(id string, dueAt time.Time) error {
 	t, err := svc.repo.Get(id)
 	if err != nil {
 		return err
 	}
 	t.DueAt = &dueAt
-	remind := dueAt.Add(-svc.leadTime)
-	t.RemindAt = &remind
-	t.Reminded = false
 	return svc.repo.Update(t)
 }
 

@@ -73,22 +73,3 @@ func TestProfileStore_ListByDateRangeFilters(t *testing.T) {
 		t.Errorf("Title = %q, want %q", tasks[0].Title, "Work due")
 	}
 }
-
-func TestProfileStore_RemindersIgnoreProfile(t *testing.T) {
-	s := newTestStore(t)
-	now := time.Now()
-	pastRemind := now.Add(-1 * time.Hour)
-
-	s.Create(task.Task{ID: task.NewID(), Title: "Work reminder", RemindAt: &pastRemind, CreatedAt: now, Profile: "work"})
-	s.Create(task.Task{ID: task.NewID(), Title: "Personal reminder", RemindAt: &pastRemind, CreatedAt: now, Profile: "personal"})
-
-	// ProfileStore for "work" should still return ALL reminders
-	workStore := NewProfileStore(s, "work")
-	reminders, err := workStore.ListDueReminders()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(reminders) != 2 {
-		t.Errorf("expected 2 reminders (all profiles), got %d", len(reminders))
-	}
-}

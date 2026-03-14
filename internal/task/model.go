@@ -10,8 +10,6 @@ type Task struct {
 	Completed         bool
 	CompletedAt       *time.Time
 	CreatedAt         time.Time
-	RemindAt          *time.Time
-	Reminded          bool
 	RecurrencePattern string
 	RecurrenceTime    string
 	// RecurrenceNextDue is reserved for future optimization (caching the next

@@ -82,15 +82,6 @@ func (ps *ProfileStore) ListUndated() ([]task.Task, error) {
 	return filterProfile(all, ps.profile), nil
 }
 
-func (ps *ProfileStore) ListDueReminders() ([]task.Task, error) {
-	// Reminders fire for ALL profiles, not just active
-	return ps.inner.ListDueReminders()
-}
-
-func (ps *ProfileStore) MarkReminded(id string) error {
-	return ps.inner.MarkReminded(id)
-}
-
 func (ps *ProfileStore) ListProfiles() ([]string, error) {
 	return ps.inner.ListProfiles()
 }

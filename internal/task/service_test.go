@@ -43,9 +43,6 @@ func TestService_AddWithDueDate(t *testing.T) {
 	if tk.DueAt == nil {
 		t.Fatal("DueAt is nil, want non-nil")
 	}
-	if tk.RemindAt == nil {
-		t.Fatal("RemindAt should be auto-set when DueAt is set")
-	}
 }
 
 func TestService_Complete(t *testing.T) {

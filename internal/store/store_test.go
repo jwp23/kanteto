@@ -233,50 +233,6 @@ func TestStore_ListOverdueAsOf(t *testing.T) {
 	}
 }
 
-func TestStore_ListDueReminders(t *testing.T) {
-	s := newTestStore(t)
-	now := time.Now().Truncate(time.Second)
-	pastRemind := now.Add(-1 * time.Hour)
-
-	s.Create(task.Task{ID: task.NewID(), Title: "Needs reminder", RemindAt: &pastRemind, CreatedAt: now})
-	alreadyRemindedID := task.NewID()
-	s.Create(task.Task{ID: alreadyRemindedID, Title: "Already reminded", RemindAt: &pastRemind, CreatedAt: now})
-	s.MarkReminded(alreadyRemindedID)
-	s.Create(task.Task{ID: task.NewID(), Title: "No reminder", CreatedAt: now})
-
-	result, err := s.ListDueReminders()
-	if err != nil {
-		t.Fatalf("ListDueReminders() error: %v", err)
-	}
-	if len(result) != 1 {
-		t.Fatalf("expected 1 due reminder, got %d", len(result))
-	}
-	if result[0].Title != "Needs reminder" {
-		t.Errorf("expected 'Needs reminder', got %q", result[0].Title)
-	}
-}
-
-func TestStore_MarkReminded(t *testing.T) {
-	s := newTestStore(t)
-	now := time.Now().Truncate(time.Second)
-	remind := now.Add(1 * time.Hour)
-
-	tk := task.Task{ID: task.NewID(), Title: "Remind me", RemindAt: &remind, CreatedAt: now}
-	s.Create(tk)
-
-	if err := s.MarkReminded(tk.ID); err != nil {
-		t.Fatalf("MarkReminded() error: %v", err)
-	}
-
-	got, err := s.Get(tk.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !got.Reminded {
-		t.Error("expected Reminded to be true after MarkReminded")
-	}
-}
-
 func TestStore_Update(t *testing.T) {
 	s := newTestStore(t)
 	now := time.Now().Truncate(time.Second)
@@ -285,16 +241,13 @@ func TestStore_Update(t *testing.T) {
 	s.Create(tk)
 
 	newDue := now.Add(24 * time.Hour)
-	newRemind := now.Add(12 * time.Hour)
 	newCompleted := now
 	tk.Title = "Updated"
 	tk.DueAt = &newDue
-	tk.RemindAt = &newRemind
 	tk.RecurrencePattern = "daily"
 	tk.RecurrenceTime = "9:00"
 	tk.Completed = true
 	tk.CompletedAt = &newCompleted
-	tk.Reminded = true
 
 	if err := s.Update(tk); err != nil {
 		t.Fatalf("Update() error: %v", err)
@@ -310,9 +263,6 @@ func TestStore_Update(t *testing.T) {
 	if got.DueAt == nil {
 		t.Fatal("DueAt should not be nil")
 	}
-	if got.RemindAt == nil {
-		t.Fatal("RemindAt should not be nil")
-	}
 	if got.RecurrencePattern != "daily" {
 		t.Errorf("RecurrencePattern = %q, want %q", got.RecurrencePattern, "daily")
 	}
@@ -324,9 +274,6 @@ func TestStore_Update(t *testing.T) {
 	}
 	if got.CompletedAt == nil {
 		t.Error("expected CompletedAt to be set")
-	}
-	if !got.Reminded {
-		t.Error("expected Reminded to be true")
 	}
 }
 
