@@ -11,7 +11,7 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 - **Who is this for?** Anyone who makes small commitments throughout the day — "I'll send that by 4pm," "remind me to follow up Friday" — and needs a fast, keyboard-driven way to track them from the terminal.
 - **What this app will NOT do:**
   - It will not replace full project management tools (Jira, Linear, Asana).
-  - It will not send any notifications or reminders.
+  - It will not send background notifications or OS-level reminders. The only alert is the in-TUI audible bell (Story 17), which fires only while the TUI is open.
   - It will not have a web or mobile interface.
 
 ---
@@ -85,6 +85,16 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
     * Kanteto stores data in a Dolt repository at `~/.local/share/kanteto/`.
     * Sync is performed via the `dolt` CLI directly in the data directory (no `kt sync` command).
     * `kt migrate` — one-time migration from SQLite to Dolt backend.
+
+### Alerts
+
+- **Story 17:** As a user, I want to hear an audible alert when a task's deadline passes while the TUI is open so that I notice time-sensitive commitments without constantly watching the screen.
+    * Feature name: `tui_due_alert`
+    * The alert fires only while the TUI is running — no background daemon, no OS notification.
+    * On each 1-minute tick, the TUI checks for tasks whose `due_at` just crossed "now". Any newly-due task triggers a terminal bell (`\a`).
+    * Each task rings the bell at most once per session (tracked in-memory, resets on exit).
+    * Completed or deleted tasks don't trigger the bell.
+    * No configuration required. Users who want silence disable the bell in their terminal emulator — standard terminal behavior.
 
 ---
 
