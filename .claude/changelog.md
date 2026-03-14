@@ -44,6 +44,28 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- TUI tag management keybindings: `t` to add tag, `T` to remove tag on selected task (`kanteto-dut`).
+- TUI reparse migration: `R` triggers confirmation flow to retroactively detect deadlines in undated tasks via `nlp.ExtractDeadline`. Preview count shown before executing (`kanteto-8rd`).
+- `Service.Reparse()` method with `ReparseResult{Updated, Total}` — scans undated tasks, strips title, sets DueAt (`kanteto-8rd`).
+- TUI sync push/pull: `p` to pull, `P` to push via async `tea.Cmd`. Includes `Syncer` interface, nil-syncer and no-remote guards, 3s auto-clear status (`kanteto-3ol`).
+- 17 new tests across `tag_test.go`, `reparse_test.go`, `sync_test.go`, and `service_test.go`.
+
+### Changed
+
+- "Jump to today" keybinding reassigned from `t` to `.` (dot) — `t` now used for tag mode (`kanteto-dut`).
+- `tui.New()` signature now accepts optional `Syncer` parameter; `cmd/root.go` wired up with `sync.New(doltDir)` (`kanteto-3ol`).
+- Updated footer keybinding hints and help overlay for all new actions.
+
+### Issues Closed
+
+- `kanteto-dut` (feature): Tag management TUI keybindings
+- `kanteto-8rd` (feature): Reparse migration TUI + service method
+- `kanteto-3ol` (feature): Dolt sync push/pull TUI keybindings
+
 ## [0.3.0] - 2026-03-14
 
 ### Fixed
