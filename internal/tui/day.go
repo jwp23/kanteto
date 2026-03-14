@@ -14,6 +14,9 @@ func renderDayView(m model) string {
 
 	date := m.viewDate
 	header := fmt.Sprintf("  %s  —  Day View", date.Format("Monday, January 2, 2006"))
+	if m.profile != "" && m.profile != "default" {
+		header += fmt.Sprintf("  [%s]", m.profile)
+	}
 	b.WriteString(headerStyle.Render(header))
 	b.WriteString("\n")
 
@@ -86,6 +89,14 @@ func renderTask(t task.Task, idx, cursor int) string {
 		line = fmt.Sprintf("%s%s  %s  %s", prefix, dimStyle.Render(id), style.Render(t.Title), dimStyle.Render(timeStr))
 	} else {
 		line = fmt.Sprintf("%s%s  %s", prefix, dimStyle.Render(id), style.Render(t.Title))
+	}
+
+	if len(t.Tags) > 0 {
+		var tags string
+		for _, tag := range t.Tags {
+			tags += " " + dimStyle.Render("["+tag+"]")
+		}
+		line += tags
 	}
 
 	if idx == cursor {

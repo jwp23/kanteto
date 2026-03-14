@@ -21,6 +21,7 @@ type Repository interface {
 	ListUndated() ([]Task, error)
 	ListDueReminders() ([]Task, error)
 	MarkReminded(id string) error
+	ListProfiles() ([]string, error)
 }
 
 // Service provides business logic for task management.
@@ -39,13 +40,17 @@ func (svc *Service) SetLeadTime(d time.Duration) {
 	svc.leadTime = d
 }
 
-// Add creates a new task with an optional due date.
+// Add creates a new task with an optional due date and tags.
 // If a due date is provided, RemindAt is auto-calculated based on lead time.
-func (svc *Service) Add(title string, dueAt *time.Time) (Task, error) {
+func (svc *Service) Add(title string, dueAt *time.Time, tags ...string) (Task, error) {
+	if tags == nil {
+		tags = []string{}
+	}
 	t := Task{
 		ID:        NewID(),
 		Title:     title,
 		DueAt:     dueAt,
+		Tags:      tags,
 		CreatedAt: time.Now(),
 	}
 
@@ -58,6 +63,37 @@ func (svc *Service) Add(title string, dueAt *time.Time) (Task, error) {
 		return Task{}, err
 	}
 	return t, nil
+}
+
+// AddTag adds a tag to a task. Duplicate tags are ignored.
+func (svc *Service) AddTag(id, tag string) error {
+	t, err := svc.repo.Get(id)
+	if err != nil {
+		return err
+	}
+	for _, existing := range t.Tags {
+		if existing == tag {
+			return nil
+		}
+	}
+	t.Tags = append(t.Tags, tag)
+	return svc.repo.Update(t)
+}
+
+// RemoveTag removes a tag from a task. Missing tags are ignored.
+func (svc *Service) RemoveTag(id, tag string) error {
+	t, err := svc.repo.Get(id)
+	if err != nil {
+		return err
+	}
+	filtered := t.Tags[:0]
+	for _, existing := range t.Tags {
+		if existing != tag {
+			filtered = append(filtered, existing)
+		}
+	}
+	t.Tags = filtered
+	return svc.repo.Update(t)
 }
 
 // AddRecurring creates a recurring task with pattern and time.

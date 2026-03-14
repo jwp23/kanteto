@@ -27,12 +27,13 @@ Purpose: This file describes the project's technical foundation, including the p
 - **Directory Structure:**
   - **`cmd/`:** Cobra command definitions. One file per command (`add.go`, `done.go`, `list.go`, `daemon.go`). `root.go` is the entry point that launches the TUI when called with no subcommand.
   - **`internal/task/`:** Domain model (`model.go`), business logic (`service.go`), recurrence computation (`recurrence.go`), and ULID generation (`id.go`).
-  - **`internal/store/`:** SQLite repository. All database queries and schema migrations live here.
+  - **`internal/store/`:** Dolt-backed repository. Shells out to `dolt sql` for queries; auto-initializes the Dolt repo on first use.
   - **`internal/tui/`:** Bubble Tea models and views. `app.go` is the main model; `day.go`, `week.go`, `month.go` are view renderers; `styles.go` defines the urgency gradient and Lip Gloss styles.
   - **`internal/daemon/`:** Background reminder process. Wakes every 30 seconds, checks for due reminders, plays sound.
   - **`internal/nlp/`:** Natural language date parsing. Handles "march 11", "tomorrow", "weekdays at 4pm", etc.
   - **`internal/config/`:** XDG-compliant configuration loading from `~/.config/kanteto/config.toml`.
-- **Key Architectural Decision:** CLI, TUI, and daemon all share a single `task.Service` layer backed by the same SQLite database. No duplicated logic between interfaces.
+  - **`internal/sync/`:** Dolt sync operations (push/pull/remote management). Thin wrapper around `dolt` CLI commands.
+- **Key Architectural Decision:** CLI, TUI, and daemon all share a single `task.Service` layer backed by a Dolt database (via `dolt sql` CLI). No duplicated logic between interfaces.
 
 ---
 
@@ -53,20 +54,19 @@ When writing or modifying code, adhere to the following standards:
 ## Where it Lives
 
 - **Hosting Provider:** Local computer only. Kanteto is a CLI tool, not a networked service.
-- **External Services:** None. Kanteto has no network dependencies.
-- **Distribution:** Single binary built with `go build`. No CGO required (pure-Go SQLite via `modernc.org/sqlite`). Cross-compilation via `GOOS`/`GOARCH` environment variables.
+- **External Dependencies:** `dolt` (v1.81.10+) and `git` must be on PATH. User installs separately.
+- **External Services:** Optional Dolt remote (GitHub, DoltHub) for sync. Not required for local use.
+- **Distribution:** Single binary built with `go build`. No CGO required. Requires `dolt` CLI as an external runtime dependency. Cross-compilation via `GOOS`/`GOARCH` environment variables.
 
 ---
 
 ## Where Your Data is Stored
 
-- **Data Storage Method:** SQLite database at `~/.local/share/kanteto/kanteto.db` (XDG-compliant, respects `XDG_DATA_HOME`).
+- **Data Storage Method:** Dolt database at `~/.local/share/kanteto/` (XDG-compliant, respects `XDG_DATA_HOME`). The store shells out to `dolt sql -q` for queries and `dolt sql -q ... -r json` for reads.
 - **Important Notes:**
-  - SQLite WAL mode is enabled for concurrent access between daemon and CLI/TUI.
-  - The database is auto-created on first run with schema migrations.
+  - Dolt repo is auto-initialized on first run with table creation and initial commit.
+  - Sync to remotes via `dolt push`/`dolt pull` (wrapped by `kt sync` commands).
   - The daemon PID file lives at `~/.local/share/kanteto/daemon.pid`.
   - User configuration lives at `~/.config/kanteto/config.toml` (entirely optional).
-- **Schema Details:**
-  - `tasks` table: `id` (TEXT PK, ULID), `title` (TEXT), `due_at` (DATETIME nullable), `completed` (INTEGER), `completed_at` (DATETIME nullable), `created_at` (DATETIME), `remind_at` (DATETIME nullable), `reminded` (INTEGER), `recurrence_pattern` (TEXT nullable), `recurrence_time` (TEXT nullable), `recurrence_next_due` (DATETIME nullable).
-  - `schema_version` table: tracks migration version for future schema updates.
-  - Indexes on `due_at`, `remind_at`, and `completed` for efficient date-range queries.
+- **Schema Details (MySQL dialect):**
+  - `tasks` table: `id` (VARCHAR(255) PK, ULID), `title` (VARCHAR(1024)), `due_at` (DATETIME nullable), `completed` (TINYINT(1)), `completed_at` (DATETIME nullable), `created_at` (DATETIME), `remind_at` (DATETIME nullable), `reminded` (TINYINT(1)), `recurrence_pattern` (VARCHAR(255) nullable), `recurrence_time` (VARCHAR(255) nullable), `recurrence_next_due` (DATETIME nullable), `tags` (JSON), `profile` (VARCHAR(255) default 'default').

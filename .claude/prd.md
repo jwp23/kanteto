@@ -11,7 +11,6 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 - **Who is this for?** Anyone who makes small commitments throughout the day — "I'll send that by 4pm," "remind me to follow up Friday" — and needs a fast, keyboard-driven way to track them from the terminal.
 - **What this app will NOT do:**
   - It will not replace full project management tools (Jira, Linear, Asana).
-  - It will not sync tasks across devices or to the cloud.
   - It will not send email, Slack, or push notifications — reminders are audible terminal sounds only.
   - It will not have a web or mobile interface.
 
@@ -70,6 +69,33 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
     * Pressing `Enter` on a highlighted column drills into day view for that date — consistent with the existing month-view drill-down behavior described in Story 8.
     * The active column is highlighted with brackets and inverted styling.
 
+### Tags & Profiles
+
+- **Story 14:** As a user, I want to tag tasks so that I can categorize and filter them.
+    * Feature name: `task_tags`
+    * `kt add "task" --tag work --tag urgent` — create with tags
+    * `kt list --tag work` — filter by tag
+    * `kt tag <id> <tag>` / `kt untag <id> <tag>` — add/remove tags
+    * Tags display in dim brackets in TUI day view
+
+- **Story 15:** As a user, I want to switch between profiles (e.g., "work" vs "personal") so that I can scope my task views.
+    * Feature name: `task_profiles`
+    * `kt profile use work` — switch active profile
+    * `kt profile list` / `kt profile show` — manage profiles
+    * `kt --profile work list` — one-off override
+    * TUI shows active profile in header for non-default profiles
+    * Reminders fire for ALL profiles regardless of active profile
+
+### Sync
+
+- **Story 16:** As a user, I want to sync my tasks across machines using Dolt so that I have the same task list everywhere.
+    * Feature name: `dolt_sync`
+    * Uses Dolt embedded driver (`github.com/dolthub/driver`) — no server needed
+    * `kt sync push` / `kt sync pull` — push/pull to remote
+    * `kt sync remote add <name> <url>` / `kt sync remote list` — manage remotes
+    * `kt migrate dolt` — migrate from SQLite to Dolt backend
+    * Backend selection via config: `backend = "sqlite"` or `backend = "dolt"`
+
 ---
 
 ## 3. The Look and Feel
@@ -77,7 +103,7 @@ Purpose: This file defines what we are building and for whom, focusing on the pr
 - **Overall Style:** Clean, minimal, fast. The TUI should feel like lazygit or htop — responsive and keyboard-driven.
 - **Main Colors:** Default terminal colors with urgency gradient (white -> yellow -> amber -> red) for approaching deadlines. Overdue tasks are bold red. Completed tasks are dimmed with a checkmark.
 - **Key Screens:**
-  - **Day View (default):** Header bar with date and current view indicator. Three sections: OVERDUE (red), TODAY, UPCOMING. Keybinding footer.
+  - **Day View (default):** Header bar with date, current view indicator, and active profile (if non-default). Three sections: OVERDUE (red), TODAY, UPCOMING. Keybinding footer. Tasks display tags in dim brackets.
   - **Week View:** 7-column grid (Sunday-Saturday). Current day column highlighted by default. `j/k` or `left/right` moves a cursor column across the 7 days; `h/l` shifts the entire week forward or backward. Press `Enter` on any column to drill into day view for that date.
   - **Month View:** Calendar grid with day numbers and task counts. Current day highlighted. Press Enter on a day to drill into day view.
   - **Help Overlay:** `?` shows all keybindings in a centered overlay.

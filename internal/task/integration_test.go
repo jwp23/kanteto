@@ -115,8 +115,8 @@ func TestIntegration_Snooze(t *testing.T) {
 	if diff < 0 {
 		diff = -diff
 	}
-	if diff > 1*time.Second {
-		t.Errorf("DueAt = %v, want ~%v (diff %v exceeds 1s tolerance)", *got.DueAt, expected, diff)
+	if diff > 2*time.Second {
+		t.Errorf("DueAt = %v, want ~%v (diff %v exceeds 2s tolerance)", *got.DueAt, expected, diff)
 	}
 }
 

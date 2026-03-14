@@ -10,11 +10,10 @@ import (
 
 func newTestService(t *testing.T) *task.Service {
 	t.Helper()
-	s, err := store.New(":memory:")
+	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.Close() })
 	return task.NewService(s)
 }
 
@@ -85,6 +84,69 @@ func TestService_Snooze(t *testing.T) {
 
 	if err := svc.Snooze(tk.ID, 2*time.Hour); err != nil {
 		t.Fatalf("Snooze() error: %v", err)
+	}
+}
+
+func TestService_AddWithTags(t *testing.T) {
+	svc := newTestService(t)
+
+	tk, err := svc.Add("Tagged task", nil, "work", "urgent")
+	if err != nil {
+		t.Fatalf("Add() error: %v", err)
+	}
+	if len(tk.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(tk.Tags))
+	}
+	if tk.Tags[0] != "work" || tk.Tags[1] != "urgent" {
+		t.Errorf("Tags = %v, want [work urgent]", tk.Tags)
+	}
+
+	// Verify round-trip through store
+	got, _ := svc.Get(tk.ID)
+	if len(got.Tags) != 2 {
+		t.Fatalf("after Get: expected 2 tags, got %d", len(got.Tags))
+	}
+}
+
+func TestService_AddTag(t *testing.T) {
+	svc := newTestService(t)
+
+	tk, _ := svc.Add("Taggable", nil)
+	if err := svc.AddTag(tk.ID, "work"); err != nil {
+		t.Fatalf("AddTag() error: %v", err)
+	}
+
+	got, _ := svc.Get(tk.ID)
+	if len(got.Tags) != 1 || got.Tags[0] != "work" {
+		t.Errorf("Tags = %v, want [work]", got.Tags)
+	}
+
+	// Adding duplicate tag should be a no-op
+	if err := svc.AddTag(tk.ID, "work"); err != nil {
+		t.Fatalf("AddTag() duplicate error: %v", err)
+	}
+	got, _ = svc.Get(tk.ID)
+	if len(got.Tags) != 1 {
+		t.Errorf("expected 1 tag after duplicate add, got %d", len(got.Tags))
+	}
+}
+
+func TestService_RemoveTag(t *testing.T) {
+	svc := newTestService(t)
+
+	tk, _ := svc.Add("Untaggable", nil, "work", "urgent")
+	if err := svc.RemoveTag(tk.ID, "work"); err != nil {
+		t.Fatalf("RemoveTag() error: %v", err)
+	}
+
+	got, _ := svc.Get(tk.ID)
+	if len(got.Tags) != 1 || got.Tags[0] != "urgent" {
+		t.Errorf("Tags = %v, want [urgent]", got.Tags)
+	}
+
+	// Removing non-existent tag should be a no-op
+	if err := svc.RemoveTag(tk.ID, "nonexistent"); err != nil {
+		t.Fatalf("RemoveTag() non-existent error: %v", err)
 	}
 }
 

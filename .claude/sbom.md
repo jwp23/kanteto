@@ -15,7 +15,8 @@ Purpose: This file lists all approved technologies, libraries, and dependencies 
 | **TUI Framework** | `github.com/charmbracelet/bubbletea` | `^1.2` | Interactive terminal UI with Elm architecture. |
 | **TUI Styling** | `github.com/charmbracelet/lipgloss` | `^1.0` | Terminal styling and urgency gradient colors. |
 | **TUI Components** | `github.com/charmbracelet/bubbles` | `^0.20` | Text input, spinners, and other TUI widgets. |
-| **Database** | `modernc.org/sqlite` | `^1.34` | Pure-Go SQLite — no CGO, single-binary distribution. |
+| **Database** | `dolt` (external CLI) | `v1.81.10+` | Dolt database via CLI (`dolt sql`). User-installed, not a Go module. |
+| **Migration** | `modernc.org/sqlite` | `^1.46` | Pure-Go SQLite — used only by `kt migrate` for one-time import from legacy SQLite DB. |
 | **ID Generation** | `github.com/oklog/ulid/v2` | `^2.2` | Sortable, unique task IDs. |
 | **Config Parsing** | `github.com/BurntSushi/toml` | `^1.4` | TOML config file loading. |
 | **Date Parsing** | `github.com/tj/go-naturaldate` | `^1.3` | Natural language date input ("tomorrow", "march 11"). |
@@ -40,8 +41,9 @@ Purpose: This file lists all approved technologies, libraries, and dependencies 
   - **Bubbles:** https://github.com/charmbracelet/bubbles
 
 - **Database:**
-  - **modernc.org/sqlite:** https://pkg.go.dev/modernc.org/sqlite
-  - **SQLite Documentation:** https://www.sqlite.org/docs.html
+  - **Dolt:** https://docs.dolthub.com/
+  - **Dolt SQL reference:** https://docs.dolthub.com/sql-reference
+  - **modernc.org/sqlite (migration only):** https://pkg.go.dev/modernc.org/sqlite
 
 - **Development Tools:**
   - **Go Documentation:** https://go.dev/doc/

@@ -53,6 +53,9 @@ type model struct {
 	// Pre-fetched tasks for month view (keyed by day of month)
 	monthTasks map[int][]task.Task
 
+	// Active profile name
+	profile string
+
 	// Midnight detection
 	lastDate int // YearDay of the last known date
 
@@ -70,13 +73,14 @@ type refreshMsg struct{}
 type tickMsg time.Time
 
 // New creates and returns the Bubble Tea program.
-func New(svc *task.Service) *tea.Program {
+func New(svc *task.Service, profile string) *tea.Program {
 	now := time.Now()
 	m := model{
 		svc:      svc,
 		viewMode: dayView,
 		viewDate: now,
 		lastDate: now.YearDay(),
+		profile:  profile,
 	}
 	return tea.NewProgram(m, tea.WithAltScreen())
 }
@@ -149,36 +153,49 @@ func (m *model) refreshData() {
 	endOfDay := startOfDay.Add(24 * time.Hour)
 	endOfWeek := endOfDay.AddDate(0, 0, 7)
 
-	overdue, _ := m.svc.ListOverdue()
-	today, _ := m.svc.ListByDateRange(startOfDay, endOfDay)
-	upcoming, _ := m.svc.ListByDateRange(endOfDay, endOfWeek)
-	undated, _ := m.svc.ListUndated()
+	all, _ := m.svc.ListAll()
 
-	m.overdue = overdue
-	m.today = today
-	m.upcoming = upcoming
-	m.undated = undated
+	m.overdue = nil
+	m.today = nil
+	m.upcoming = nil
+	m.undated = nil
+
+	realNow := time.Now()
+	for _, t := range all {
+		switch {
+		case t.DueAt == nil:
+			m.undated = append(m.undated, t)
+		case t.DueAt.Before(realNow) && t.DueAt.Before(startOfDay):
+			m.overdue = append(m.overdue, t)
+		case !t.DueAt.Before(startOfDay) && t.DueAt.Before(endOfDay):
+			m.today = append(m.today, t)
+		case !t.DueAt.Before(endOfDay) && t.DueAt.Before(endOfWeek):
+			m.upcoming = append(m.upcoming, t)
+		default:
+			if t.DueAt.Before(realNow) {
+				m.overdue = append(m.overdue, t)
+			}
+		}
+	}
 
 	// Flatten for cursor
 	m.allTasks = nil
-	m.allTasks = append(m.allTasks, overdue...)
-	m.allTasks = append(m.allTasks, today...)
-	m.allTasks = append(m.allTasks, upcoming...)
-	m.allTasks = append(m.allTasks, undated...)
+	m.allTasks = append(m.allTasks, m.overdue...)
+	m.allTasks = append(m.allTasks, m.today...)
+	m.allTasks = append(m.allTasks, m.upcoming...)
+	m.allTasks = append(m.allTasks, m.undated...)
 
 	if m.cursor >= len(m.allTasks) {
 		m.cursor = max(0, len(m.allTasks)-1)
 	}
 
-	// Pre-fetch month tasks in a single query
+	// Pre-compute month tasks from fetched data
 	if m.viewMode == monthView {
-		now := m.viewDate
 		firstOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		firstOfNextMonth := firstOfMonth.AddDate(0, 1, 0)
-		monthTasks, _ := m.svc.ListByDateRange(firstOfMonth, firstOfNextMonth)
 		m.monthTasks = make(map[int][]task.Task)
-		for _, t := range monthTasks {
-			if t.DueAt != nil {
+		for _, t := range all {
+			if t.DueAt != nil && !t.DueAt.Before(firstOfMonth) && t.DueAt.Before(firstOfNextMonth) {
 				day := t.DueAt.Day()
 				m.monthTasks[day] = append(m.monthTasks[day], t)
 			}
