@@ -46,6 +46,26 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [0.3.0] - 2026-03-14
 
+### Fixed
+
+- `root.go` data directory now uses `dolt/` subdirectory, matching `migrate.go` — TUI sees migrated data (`kanteto-dxm`).
+
+### Removed
+
+- `remind_at` and `reminded` columns from Dolt schema.
+- `RemindAt`, `Reminded` fields from `task.Task` model.
+- `DefaultLeadTime` constant and `ReminderLeadTime` config field.
+- `SetLeadTime` method, remind_at calculations in Add/AddRecurring/Complete/Snooze/SetDueAt.
+- `ListDueReminders`, `MarkReminded` from Repository interface, Store, and ProfileStore.
+- `GetDueReminders`, `MarkReminded` from Service.
+- 3 tests for removed reminder code; net -172 lines (`kanteto-ouy`).
+
+### Issues Closed
+
+- `kanteto-dxm` (bug): Fix data directory path in root.go
+- `kanteto-ouy` (task): Remove vestigial ReminderLeadTime and remind_at system
+- `kanteto-wdm` (task): Bump version string to 0.3.0
+
 ### Changed
 
 - **BREAKING:** Replaced SQLite with Dolt CLI as sole datastore. Kanteto now requires `dolt` (v1.81.10+) and `git` on PATH.
