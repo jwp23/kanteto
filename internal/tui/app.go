@@ -44,6 +44,14 @@ type model struct {
 	editing   bool
 	editInput string
 
+	// Tag mode
+	tagging  bool
+	tagInput string
+
+	// Untag mode
+	untagging  bool
+	untagInput string
+
 	// Week view cursor (0=Sunday, 6=Saturday)
 	weekCursorDay int
 
@@ -142,6 +150,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.editing {
 			return m.handleEditInput(msg)
+		}
+
+		if m.tagging {
+			return m.handleTagInput(msg)
+		}
+
+		if m.untagging {
+			return m.handleUntagInput(msg)
 		}
 
 		return m.handleKeypress(msg)
@@ -345,6 +361,20 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "t":
+		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
+			m.tagging = true
+			m.tagInput = ""
+		}
+		return m, nil
+
+	case "T":
+		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
+			m.untagging = true
+			m.untagInput = ""
+		}
+		return m, nil
+
+	case ".":
 		m.viewDate = time.Now()
 		m.refreshData()
 		return m, nil
@@ -485,6 +515,72 @@ func (m model) handleSnoozeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m model) handleTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.tagInput != "" {
+			t := m.allTasks[m.cursor]
+			if err := m.svc.AddTag(t.ID, m.tagInput); err != nil {
+				m.err = err
+			}
+			m.refreshData()
+		}
+		m.tagging = false
+		m.tagInput = ""
+		return m, nil
+
+	case "esc":
+		m.tagging = false
+		m.tagInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.tagInput) > 0 {
+			m.tagInput = m.tagInput[:len(m.tagInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.String()) == 1 {
+			m.tagInput += msg.String()
+		}
+		return m, nil
+	}
+}
+
+func (m model) handleUntagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.untagInput != "" {
+			t := m.allTasks[m.cursor]
+			if err := m.svc.RemoveTag(t.ID, m.untagInput); err != nil {
+				m.err = err
+			}
+			m.refreshData()
+		}
+		m.untagging = false
+		m.untagInput = ""
+		return m, nil
+
+	case "esc":
+		m.untagging = false
+		m.untagInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.untagInput) > 0 {
+			m.untagInput = m.untagInput[:len(m.untagInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.String()) == 1 {
+			m.untagInput += msg.String()
+		}
+		return m, nil
+	}
+}
+
 func (m model) handleEditInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
@@ -559,6 +655,14 @@ func renderFooter(m model) string {
 		return fmt.Sprintf("  new deadline: %s█  (e.g. friday 3pm, tomorrow, march 15)", m.editInput)
 	}
 
+	if m.tagging {
+		return fmt.Sprintf("  tag: %s█  (enter to add, esc to cancel)", m.tagInput)
+	}
+
+	if m.untagging {
+		return fmt.Sprintf("  remove tag: %s█  (enter to remove, esc to cancel)", m.untagInput)
+	}
+
 	viewIndicator := "[d]ay [w]eek [m]onth"
 	switch m.viewMode {
 	case dayView:
@@ -569,12 +673,12 @@ func renderFooter(m model) string {
 		viewIndicator = "[d]ay [w]eek [M]onth"
 	}
 
-	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  h/l:nav  t:today  ?:help  q:quit"
+	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  t:tag  T:untag  h/l:nav  .:today  ?:help  q:quit"
 	if m.viewMode == weekView {
-		keys = "j/k:day  ←/→:day  enter:open  h/l:week  a:add  t:today  ?:help  q:quit"
+		keys = "j/k:day  ←/→:day  enter:open  h/l:week  a:add  .:today  ?:help  q:quit"
 	}
 	if m.viewMode == monthView {
-		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  t:today  ?:help  q:quit"
+		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  .:today  ?:help  q:quit"
 	}
 	return helpStyle.Render(fmt.Sprintf("  %s  |  %s", viewIndicator, keys))
 }
@@ -588,7 +692,7 @@ func renderHelp(m model) string {
     k / ↑       Move up (day in week view, week in month view)
     ← / →       Move by day in week/month view
     h / l       Previous/next day, week, or month
-    t           Jump to today
+    .           Jump to today
     enter       Open selected day (week/month view)
 
   Views
@@ -601,6 +705,8 @@ func renderHelp(m model) string {
     a           Add new task
     e           Edit deadline
     s           Snooze task
+    t           Add tag
+    T           Remove tag
     x / delete  Delete task
     ?           Toggle help
     q           Quit

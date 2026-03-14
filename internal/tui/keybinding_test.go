@@ -139,17 +139,17 @@ func TestKeypress_TimeNav(t *testing.T) {
 	}
 }
 
-func TestKeypress_TJumpsToday(t *testing.T) {
+func TestKeypress_DotJumpsToday(t *testing.T) {
 	m := testDayModel(t)
 
 	// Navigate to the past
 	m.viewDate = m.viewDate.AddDate(0, 0, -10)
 	m.refreshData()
 
-	got := sendKey(m, "t").(model)
+	got := sendKey(m, ".").(model)
 	today := time.Now()
 	if got.viewDate.Day() != today.Day() || got.viewDate.Month() != today.Month() {
-		t.Errorf("t: expected today (%s), got %s", today.Format("Jan 2"), got.viewDate.Format("Jan 2"))
+		t.Errorf(".: expected today (%s), got %s", today.Format("Jan 2"), got.viewDate.Format("Jan 2"))
 	}
 }
 
