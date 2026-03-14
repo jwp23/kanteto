@@ -18,6 +18,7 @@ type Task struct {
 	// occurrence to avoid recomputation). Currently unused — NextOccurrence()
 	// computes live.
 	RecurrenceNextDue *time.Time
+	Tags              []string
 }
 
 // IsOverdue returns true if the task has a past due date and is not completed.

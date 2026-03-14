@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -41,8 +42,17 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+type migration struct {
+	version int
+	sql     string
+}
+
+var migrations = []migration{
+	{1, `ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`},
+}
+
 func (s *Store) migrate() error {
-	schema := `
+	baseSchema := `
 	CREATE TABLE IF NOT EXISTS schema_version (
 		version INTEGER PRIMARY KEY
 	);
@@ -63,27 +73,49 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_tasks_remind_at ON tasks(remind_at);
 	CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(completed);
 	`
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(baseSchema); err != nil {
+		return err
+	}
+
+	var version int
+	err := s.db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&version)
+	if err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
+
+	for _, m := range migrations {
+		if m.version > version {
+			if _, err := s.db.Exec(m.sql); err != nil {
+				return fmt.Errorf("migration v%d: %w", m.version, err)
+			}
+			if _, err := s.db.Exec("INSERT INTO schema_version (version) VALUES (?)", m.version); err != nil {
+				return fmt.Errorf("record migration v%d: %w", m.version, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // Create inserts a new task.
 func (s *Store) Create(t task.Task) error {
 	_, err := s.db.Exec(
-		`INSERT INTO tasks (id, title, due_at, completed, created_at, remind_at, recurrence_pattern, recurrence_time, recurrence_next_due)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (id, title, due_at, completed, created_at, remind_at, recurrence_pattern, recurrence_time, recurrence_next_due, tags)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.Title, timePtr(t.DueAt), boolToInt(t.Completed), t.CreatedAt,
 		timePtr(t.RemindAt), nullStr(t.RecurrencePattern), nullStr(t.RecurrenceTime), timePtr(t.RecurrenceNextDue),
+		marshalTags(t.Tags),
 	)
 	return err
 }
 
+const taskColumns = `id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
+	recurrence_pattern, recurrence_time, recurrence_next_due, tags`
+
 // Get retrieves a task by ID.
 func (s *Store) Get(id string) (task.Task, error) {
 	row := s.db.QueryRow(
-		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-		        recurrence_pattern, recurrence_time, recurrence_next_due
-		 FROM tasks WHERE id = ?`, id,
+		`SELECT `+taskColumns+` FROM tasks WHERE id = ?`, id,
 	)
 	return scanTask(row)
 }
@@ -113,8 +145,7 @@ func (s *Store) UpdateDueAt(id string, dueAt *time.Time) error {
 // ListByDateRange returns incomplete tasks with due dates in [start, end).
 func (s *Store) ListByDateRange(start, end time.Time) ([]task.Task, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-		        recurrence_pattern, recurrence_time, recurrence_next_due
+		`SELECT `+taskColumns+`
 		 FROM tasks
 		 WHERE completed = 0 AND due_at >= ? AND due_at < ?
 		 ORDER BY due_at ASC`, start, end,
@@ -128,9 +159,7 @@ func (s *Store) ListByDateRange(start, end time.Time) ([]task.Task, error) {
 
 // ListAll returns all tasks, optionally including completed.
 func (s *Store) ListAll(includeCompleted bool) ([]task.Task, error) {
-	q := `SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-	             recurrence_pattern, recurrence_time, recurrence_next_due
-	      FROM tasks`
+	q := `SELECT ` + taskColumns + ` FROM tasks`
 	if !includeCompleted {
 		q += " WHERE completed = 0"
 	}
@@ -147,8 +176,7 @@ func (s *Store) ListAll(includeCompleted bool) ([]task.Task, error) {
 // ListUndated returns incomplete tasks with no due date.
 func (s *Store) ListUndated() ([]task.Task, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-		        recurrence_pattern, recurrence_time, recurrence_next_due
+		`SELECT `+taskColumns+`
 		 FROM tasks
 		 WHERE completed = 0 AND due_at IS NULL
 		 ORDER BY created_at ASC`,
@@ -163,8 +191,7 @@ func (s *Store) ListUndated() ([]task.Task, error) {
 // ListOverdue returns incomplete tasks with due dates before now.
 func (s *Store) ListOverdue() ([]task.Task, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-		        recurrence_pattern, recurrence_time, recurrence_next_due
+		`SELECT `+taskColumns+`
 		 FROM tasks
 		 WHERE completed = 0 AND due_at < ?
 		 ORDER BY due_at ASC`, time.Now(),
@@ -179,8 +206,7 @@ func (s *Store) ListOverdue() ([]task.Task, error) {
 // ListOverdueAsOf returns incomplete tasks with due dates before the given time.
 func (s *Store) ListOverdueAsOf(asOf time.Time) ([]task.Task, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-		        recurrence_pattern, recurrence_time, recurrence_next_due
+		`SELECT `+taskColumns+`
 		 FROM tasks
 		 WHERE completed = 0 AND due_at < ?
 		 ORDER BY due_at ASC`, asOf,
@@ -195,8 +221,7 @@ func (s *Store) ListOverdueAsOf(asOf time.Time) ([]task.Task, error) {
 // ListDueReminders returns tasks that need reminders fired.
 func (s *Store) ListDueReminders() ([]task.Task, error) {
 	rows, err := s.db.Query(
-		`SELECT id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-		        recurrence_pattern, recurrence_time, recurrence_next_due
+		`SELECT `+taskColumns+`
 		 FROM tasks
 		 WHERE completed = 0 AND reminded = 0 AND remind_at IS NOT NULL AND remind_at <= ?
 		 ORDER BY remind_at ASC`, time.Now(),
@@ -218,11 +243,13 @@ func (s *Store) MarkReminded(id string) error {
 func (s *Store) Update(t task.Task) error {
 	_, err := s.db.Exec(
 		`UPDATE tasks SET title = ?, due_at = ?, remind_at = ?, recurrence_pattern = ?,
-		 recurrence_time = ?, recurrence_next_due = ?, completed = ?, completed_at = ?, reminded = ?
+		 recurrence_time = ?, recurrence_next_due = ?, completed = ?, completed_at = ?, reminded = ?,
+		 tags = ?
 		 WHERE id = ?`,
 		t.Title, timePtr(t.DueAt), timePtr(t.RemindAt), nullStr(t.RecurrencePattern),
 		nullStr(t.RecurrenceTime), timePtr(t.RecurrenceNextDue),
-		boolToInt(t.Completed), timePtr(t.CompletedAt), boolToInt(t.Reminded), t.ID,
+		boolToInt(t.Completed), timePtr(t.CompletedAt), boolToInt(t.Reminded),
+		marshalTags(t.Tags), t.ID,
 	)
 	return err
 }
@@ -237,10 +264,12 @@ func scanTask(s scanner) (task.Task, error) {
 	var dueAt, completedAt, remindAt, recurrenceNextDue sql.NullTime
 	var recurrencePattern, recurrenceTime sql.NullString
 	var completed, reminded int
+	var tagsJSON string
 
 	err := s.Scan(
 		&t.ID, &t.Title, &dueAt, &completed, &completedAt, &t.CreatedAt,
 		&remindAt, &reminded, &recurrencePattern, &recurrenceTime, &recurrenceNextDue,
+		&tagsJSON,
 	)
 	if err != nil {
 		return t, err
@@ -266,6 +295,7 @@ func scanTask(s scanner) (task.Task, error) {
 	if recurrenceNextDue.Valid {
 		t.RecurrenceNextDue = &recurrenceNextDue.Time
 	}
+	t.Tags = unmarshalTags(tagsJSON)
 	return t, nil
 }
 
@@ -300,4 +330,26 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+func marshalTags(tags []string) string {
+	if len(tags) == 0 {
+		return "[]"
+	}
+	data, _ := json.Marshal(tags)
+	return string(data)
+}
+
+func unmarshalTags(s string) []string {
+	var tags []string
+	if s == "" {
+		return []string{}
+	}
+	if err := json.Unmarshal([]byte(s), &tags); err != nil {
+		return []string{}
+	}
+	if tags == nil {
+		return []string{}
+	}
+	return tags
 }

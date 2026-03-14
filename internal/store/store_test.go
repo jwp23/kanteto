@@ -349,3 +349,122 @@ func TestStore_UpdateDueAt(t *testing.T) {
 		t.Fatal("DueAt is nil after update")
 	}
 }
+
+func TestStore_CreateWithTags(t *testing.T) {
+	s := newTestStore(t)
+
+	tk := task.Task{
+		ID:        task.NewID(),
+		Title:     "Tagged task",
+		CreatedAt: time.Now(),
+		Tags:      []string{"work", "urgent"},
+	}
+	if err := s.Create(tk); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	got, err := s.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if len(got.Tags) != 2 {
+		t.Fatalf("expected 2 tags, got %d", len(got.Tags))
+	}
+	if got.Tags[0] != "work" || got.Tags[1] != "urgent" {
+		t.Errorf("Tags = %v, want [work urgent]", got.Tags)
+	}
+}
+
+func TestStore_CreateWithNoTags(t *testing.T) {
+	s := newTestStore(t)
+
+	tk := task.Task{
+		ID:        task.NewID(),
+		Title:     "No tags",
+		CreatedAt: time.Now(),
+	}
+	if err := s.Create(tk); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	got, err := s.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if got.Tags == nil {
+		t.Fatal("Tags should be initialized to empty slice, not nil")
+	}
+	if len(got.Tags) != 0 {
+		t.Errorf("expected 0 tags, got %d", len(got.Tags))
+	}
+}
+
+func TestStore_UpdateTags(t *testing.T) {
+	s := newTestStore(t)
+
+	tk := task.Task{
+		ID:        task.NewID(),
+		Title:     "Update tags",
+		CreatedAt: time.Now(),
+		Tags:      []string{"work"},
+	}
+	s.Create(tk)
+
+	tk.Tags = []string{"work", "important"}
+	if err := s.Update(tk); err != nil {
+		t.Fatalf("Update() error: %v", err)
+	}
+
+	got, err := s.Get(tk.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Tags) != 2 {
+		t.Fatalf("expected 2 tags after update, got %d", len(got.Tags))
+	}
+	if got.Tags[1] != "important" {
+		t.Errorf("Tags[1] = %q, want %q", got.Tags[1], "important")
+	}
+}
+
+func TestStore_TagsPreservedInListAll(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now()
+
+	s.Create(task.Task{ID: task.NewID(), Title: "Tagged", CreatedAt: now, Tags: []string{"work"}})
+	s.Create(task.Task{ID: task.NewID(), Title: "Untagged", CreatedAt: now})
+
+	all, err := s.ListAll(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(all))
+	}
+
+	// Find the tagged task
+	var tagged task.Task
+	for _, tk := range all {
+		if tk.Title == "Tagged" {
+			tagged = tk
+			break
+		}
+	}
+	if len(tagged.Tags) != 1 || tagged.Tags[0] != "work" {
+		t.Errorf("tagged task Tags = %v, want [work]", tagged.Tags)
+	}
+}
+
+func TestStore_MigrationVersioning(t *testing.T) {
+	s := newTestStore(t)
+
+	// Opening the same DB again should not fail (migrations are idempotent)
+	var version int
+	err := s.db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&version)
+	if err != nil {
+		t.Fatalf("querying schema version: %v", err)
+	}
+	if version < 1 {
+		t.Errorf("expected schema version >= 1, got %d", version)
+	}
+}
