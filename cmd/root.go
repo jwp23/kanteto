@@ -12,7 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var svc *task.Service
+var (
+	svc            *task.Service
+	rawStore       *store.Store
+	cfg            config.Config
+	profileOverride string
+)
 
 var rootCmd = &cobra.Command{
 	Use:     "kt",
@@ -23,7 +28,7 @@ var rootCmd = &cobra.Command{
 		return initService()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := tui.New(svc)
+		p := tui.New(svc, activeProfile())
 		_, err := p.Run()
 		return err
 	},
@@ -32,6 +37,13 @@ var rootCmd = &cobra.Command{
 // Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+func activeProfile() string {
+	if profileOverride != "" {
+		return profileOverride
+	}
+	return cfg.ActiveProfile
 }
 
 func initService() error {
@@ -45,13 +57,25 @@ func initService() error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
+	rawStore = s
 
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+	var loadErr error
+	cfg, loadErr = config.Load()
+	if loadErr != nil {
+		return fmt.Errorf("load config: %w", loadErr)
 	}
 
-	svc = task.NewService(s)
+	profile := activeProfile()
+	var repo task.Repository = s
+	if profile != "" {
+		repo = store.NewProfileStore(s, profile)
+	}
+
+	svc = task.NewService(repo)
 	svc.SetLeadTime(cfg.ReminderLeadTime)
 	return nil
+}
+
+func init() {
+	rootCmd.PersistentFlags().StringVar(&profileOverride, "profile", "", "override active profile for this command")
 }

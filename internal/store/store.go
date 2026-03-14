@@ -256,6 +256,25 @@ func (s *Store) Update(t task.Task) error {
 	return err
 }
 
+// ListProfiles returns distinct profile names from all tasks.
+func (s *Store) ListProfiles() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT profile FROM tasks ORDER BY profile`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var profiles []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		profiles = append(profiles, p)
+	}
+	return profiles, rows.Err()
+}
+
 // scanner is implemented by both *sql.Row and *sql.Rows.
 type scanner interface {
 	Scan(dest ...any) error

@@ -154,6 +154,24 @@ func TestRenderTask_CursorPrefix(t *testing.T) {
 	}
 }
 
+func TestDayView_ProfileIndicator(t *testing.T) {
+	m := testDayModel(t)
+
+	// Default profile should not show indicator
+	m.profile = "default"
+	output := renderDayView(m)
+	if strings.Contains(output, "[default]") {
+		t.Errorf("default profile should not show indicator, got:\n%s", output)
+	}
+
+	// Non-default profile should show indicator
+	m.profile = "work"
+	output = renderDayView(m)
+	if !strings.Contains(output, "[work]") {
+		t.Errorf("expected '[work]' in header, got:\n%s", output)
+	}
+}
+
 func TestRenderTask_WithTags(t *testing.T) {
 	now := time.Now()
 	tk := task.Task{

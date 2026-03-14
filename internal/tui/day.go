@@ -14,6 +14,9 @@ func renderDayView(m model) string {
 
 	date := m.viewDate
 	header := fmt.Sprintf("  %s  —  Day View", date.Format("Monday, January 2, 2006"))
+	if m.profile != "" && m.profile != "default" {
+		header += fmt.Sprintf("  [%s]", m.profile)
+	}
 	b.WriteString(headerStyle.Render(header))
 	b.WriteString("\n")
 

@@ -53,6 +53,9 @@ type model struct {
 	// Pre-fetched tasks for month view (keyed by day of month)
 	monthTasks map[int][]task.Task
 
+	// Active profile name
+	profile string
+
 	// Midnight detection
 	lastDate int // YearDay of the last known date
 
@@ -70,13 +73,14 @@ type refreshMsg struct{}
 type tickMsg time.Time
 
 // New creates and returns the Bubble Tea program.
-func New(svc *task.Service) *tea.Program {
+func New(svc *task.Service, profile string) *tea.Program {
 	now := time.Now()
 	m := model{
 		svc:      svc,
 		viewMode: dayView,
 		viewDate: now,
 		lastDate: now.YearDay(),
+		profile:  profile,
 	}
 	return tea.NewProgram(m, tea.WithAltScreen())
 }
