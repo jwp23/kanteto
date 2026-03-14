@@ -42,6 +42,7 @@ func TestRenderWeekView_Tasks(t *testing.T) {
 	wednesday := time.Date(2026, time.March, 18, 14, 0, 0, 0, time.Local)
 	m.svc.Add("Wednesday review", &wednesday)
 
+	m.refreshData()
 	output := renderWeekView(m)
 	if !strings.Contains(output, "Monday meet") || !strings.Contains(output, "Wednesday r") {
 		// Titles may be truncated by column width, check for partial match

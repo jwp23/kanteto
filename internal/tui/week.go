@@ -46,17 +46,9 @@ func renderWeekView(m model) string {
 	b.WriteString("  " + strings.Join(headers, " "))
 	b.WriteString("\n")
 
-	// Single query for the whole week, then bucket by day
-	weekStart := time.Date(startOfWeek.Year(), startOfWeek.Month(), startOfWeek.Day(), 0, 0, 0, 0, startOfWeek.Location())
-	weekEnd := weekStart.AddDate(0, 0, 7)
-	allTasks, _ := m.svc.ListByDateRange(weekStart, weekEnd)
-
-	tasksByDay := make(map[string][]task.Task)
-	for _, t := range allTasks {
-		if t.DueAt != nil {
-			key := t.DueAt.Format("2006-01-02")
-			tasksByDay[key] = append(tasksByDay[key], t)
-		}
+	tasksByDay := m.weekTasks
+	if tasksByDay == nil {
+		tasksByDay = make(map[string][]task.Task)
 	}
 
 	// Build columns from bucketed tasks
