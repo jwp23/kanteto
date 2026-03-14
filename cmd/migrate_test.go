@@ -37,7 +37,7 @@ func createSQLiteDB(t *testing.T, dbPath string) *sql.DB {
 		id TEXT PRIMARY KEY, title TEXT NOT NULL, due_at DATETIME,
 		completed INTEGER NOT NULL DEFAULT 0, completed_at DATETIME,
 		created_at DATETIME NOT NULL, recurrence_pattern TEXT,
-		recurrence_time TEXT, recurrence_next_due DATETIME,
+		recurrence_time TEXT,
 		tags TEXT NOT NULL DEFAULT '[]', profile TEXT NOT NULL DEFAULT 'default'
 	);`
 	if _, err := db.Exec(schema); err != nil {
@@ -72,10 +72,10 @@ func insertSQLiteTask(t *testing.T, db *sql.DB, tk task.Task) {
 		completed = 1
 	}
 	_, err := db.Exec(`INSERT INTO tasks (id, title, due_at, completed, completed_at, created_at,
-		recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		recurrence_pattern, recurrence_time, tags, profile)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		tk.ID, tk.Title, dueAt, completed, completedAt, tk.CreatedAt,
-		recPat, recTime, nil, tags, tk.Profile)
+		recPat, recTime, tags, tk.Profile)
 	if err != nil {
 		t.Fatalf("insert task: %v", err)
 	}

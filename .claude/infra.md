@@ -68,4 +68,4 @@ When writing or modifying code, adhere to the following standards:
   - The daemon PID file lives at `~/.local/share/kanteto/daemon.pid`.
   - User configuration lives at `~/.config/kanteto/config.toml` (entirely optional).
 - **Schema Details (MySQL dialect):**
-  - `tasks` table: `id` (VARCHAR(255) PK, ULID), `title` (VARCHAR(1024)), `due_at` (DATETIME nullable), `completed` (TINYINT(1)), `completed_at` (DATETIME nullable), `created_at` (DATETIME), `recurrence_pattern` (VARCHAR(255) nullable), `recurrence_time` (VARCHAR(255) nullable), `recurrence_next_due` (DATETIME nullable), `tags` (JSON), `profile` (VARCHAR(255) default 'default').
+  - `tasks` table: `id` (VARCHAR(255) PK, ULID), `title` (VARCHAR(1024)), `due_at` (DATETIME nullable), `completed` (TINYINT(1)), `completed_at` (DATETIME nullable), `created_at` (DATETIME), `recurrence_pattern` (VARCHAR(255) nullable), `recurrence_time` (VARCHAR(255) nullable), `tags` (JSON), `profile` (VARCHAR(255) default 'default').

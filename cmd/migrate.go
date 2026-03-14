@@ -79,7 +79,7 @@ func readSQLiteTasks(dsn string) ([]task.Task, error) {
 	defer db.Close()
 
 	rows, err := db.Query(`SELECT id, title, due_at, completed, completed_at, created_at,
-		recurrence_pattern, recurrence_time, recurrence_next_due,
+		recurrence_pattern, recurrence_time,
 		tags, profile FROM tasks`)
 	if err != nil {
 		return nil, err
@@ -89,14 +89,14 @@ func readSQLiteTasks(dsn string) ([]task.Task, error) {
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
-		var dueAt, completedAt, recurrenceNextDue sql.NullTime
+		var dueAt, completedAt sql.NullTime
 		var recurrencePattern, recurrenceTime sql.NullString
 		var completed int
 		var tagsJSON string
 
 		err := rows.Scan(
 			&t.ID, &t.Title, &dueAt, &completed, &completedAt, &t.CreatedAt,
-			&recurrencePattern, &recurrenceTime, &recurrenceNextDue,
+			&recurrencePattern, &recurrenceTime,
 			&tagsJSON, &t.Profile,
 		)
 		if err != nil {
@@ -115,9 +115,6 @@ func readSQLiteTasks(dsn string) ([]task.Task, error) {
 		}
 		if recurrenceTime.Valid {
 			t.RecurrenceTime = recurrenceTime.String
-		}
-		if recurrenceNextDue.Valid {
-			t.RecurrenceNextDue = &recurrenceNextDue.Time
 		}
 		t.Tags = unmarshalTags(tagsJSON)
 		tasks = append(tasks, t)

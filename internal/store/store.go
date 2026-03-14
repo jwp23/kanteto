@@ -15,7 +15,7 @@ import (
 const timeLayout = "2006-01-02 15:04:05"
 
 const taskColumns = `id, title, due_at, completed, completed_at, created_at,
-	recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile`
+	recurrence_pattern, recurrence_time, tags, profile`
 
 // Store is a Dolt-backed task repository that shells out to `dolt sql`.
 type Store struct {
@@ -53,7 +53,6 @@ func (s *Store) initRepo() error {
 		created_at          DATETIME NOT NULL,
 		recurrence_pattern  VARCHAR(255),
 		recurrence_time     VARCHAR(255),
-		recurrence_next_due DATETIME,
 		tags                JSON NOT NULL,
 		profile             VARCHAR(255) NOT NULL DEFAULT 'default'
 	);`
@@ -75,10 +74,10 @@ func (s *Store) Close() error {
 // Create inserts a new task.
 func (s *Store) Create(t task.Task) error {
 	q := fmt.Sprintf(
-		`INSERT INTO tasks (id, title, due_at, completed, created_at, recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile)
-		 VALUES (%s, %s, %s, %d, %s, %s, %s, %s, %s, %s)`,
+		`INSERT INTO tasks (id, title, due_at, completed, created_at, recurrence_pattern, recurrence_time, tags, profile)
+		 VALUES (%s, %s, %s, %d, %s, %s, %s, %s, %s)`,
 		quote(t.ID), quote(t.Title), quoteTimePtr(t.DueAt), boolToInt(t.Completed), quoteTime(t.CreatedAt),
-		quoteNullStr(t.RecurrencePattern), quoteNullStr(t.RecurrenceTime), quoteTimePtr(t.RecurrenceNextDue),
+		quoteNullStr(t.RecurrencePattern), quoteNullStr(t.RecurrenceTime),
 		quote(marshalTags(t.Tags)), quote(t.Profile),
 	)
 	return s.execSQL(q)
@@ -117,11 +116,11 @@ func (s *Store) Delete(id string) error {
 func (s *Store) Update(t task.Task) error {
 	q := fmt.Sprintf(
 		`UPDATE tasks SET title = %s, due_at = %s, recurrence_pattern = %s,
-		 recurrence_time = %s, recurrence_next_due = %s, completed = %d, completed_at = %s,
+		 recurrence_time = %s, completed = %d, completed_at = %s,
 		 tags = %s, profile = %s
 		 WHERE id = %s`,
 		quote(t.Title), quoteTimePtr(t.DueAt), quoteNullStr(t.RecurrencePattern),
-		quoteNullStr(t.RecurrenceTime), quoteTimePtr(t.RecurrenceNextDue),
+		quoteNullStr(t.RecurrenceTime),
 		boolToInt(t.Completed), quoteTimePtr(t.CompletedAt),
 		quote(marshalTags(t.Tags)), quote(t.Profile), quote(t.ID),
 	)
@@ -287,7 +286,6 @@ func rowToTask(row map[string]any) (task.Task, error) {
 
 	t.RecurrencePattern = strVal(row, "recurrence_pattern")
 	t.RecurrenceTime = strVal(row, "recurrence_time")
-	t.RecurrenceNextDue = timeVal(row, "recurrence_next_due")
 	t.Tags = tagsVal(row, "tags")
 	t.Profile = strVal(row, "profile")
 
