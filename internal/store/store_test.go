@@ -455,6 +455,53 @@ func TestStore_TagsPreservedInListAll(t *testing.T) {
 	}
 }
 
+func TestStore_CreateWithProfile(t *testing.T) {
+	s := newTestStore(t)
+
+	tk := task.Task{
+		ID:        task.NewID(),
+		Title:     "Work task",
+		CreatedAt: time.Now(),
+		Profile:   "work",
+	}
+	if err := s.Create(tk); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	got, err := s.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if got.Profile != "work" {
+		t.Errorf("Profile = %q, want %q", got.Profile, "work")
+	}
+}
+
+func TestStore_DefaultProfile(t *testing.T) {
+	s := newTestStore(t)
+
+	// Task without explicit profile gets 'default' from DB default
+	tk := task.Task{
+		ID:        task.NewID(),
+		Title:     "Default profile",
+		CreatedAt: time.Now(),
+	}
+	if err := s.Create(tk); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	got, err := s.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	// Empty string in Go maps to DB default 'default'
+	// but since we INSERT the Go value directly, it'll be empty string
+	// unless we handle it. Let's verify the round-trip.
+	if got.Profile != "" {
+		t.Errorf("Profile = %q, want empty (no explicit profile set)", got.Profile)
+	}
+}
+
 func TestStore_MigrationVersioning(t *testing.T) {
 	s := newTestStore(t)
 

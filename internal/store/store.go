@@ -49,6 +49,8 @@ type migration struct {
 
 var migrations = []migration{
 	{1, `ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`},
+	{2, `ALTER TABLE tasks ADD COLUMN profile TEXT NOT NULL DEFAULT 'default'`},
+	{3, `CREATE INDEX IF NOT EXISTS idx_tasks_profile ON tasks(profile)`},
 }
 
 func (s *Store) migrate() error {
@@ -100,17 +102,17 @@ func (s *Store) migrate() error {
 // Create inserts a new task.
 func (s *Store) Create(t task.Task) error {
 	_, err := s.db.Exec(
-		`INSERT INTO tasks (id, title, due_at, completed, created_at, remind_at, recurrence_pattern, recurrence_time, recurrence_next_due, tags)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tasks (id, title, due_at, completed, created_at, remind_at, recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.Title, timePtr(t.DueAt), boolToInt(t.Completed), t.CreatedAt,
 		timePtr(t.RemindAt), nullStr(t.RecurrencePattern), nullStr(t.RecurrenceTime), timePtr(t.RecurrenceNextDue),
-		marshalTags(t.Tags),
+		marshalTags(t.Tags), t.Profile,
 	)
 	return err
 }
 
 const taskColumns = `id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-	recurrence_pattern, recurrence_time, recurrence_next_due, tags`
+	recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile`
 
 // Get retrieves a task by ID.
 func (s *Store) Get(id string) (task.Task, error) {
@@ -244,12 +246,12 @@ func (s *Store) Update(t task.Task) error {
 	_, err := s.db.Exec(
 		`UPDATE tasks SET title = ?, due_at = ?, remind_at = ?, recurrence_pattern = ?,
 		 recurrence_time = ?, recurrence_next_due = ?, completed = ?, completed_at = ?, reminded = ?,
-		 tags = ?
+		 tags = ?, profile = ?
 		 WHERE id = ?`,
 		t.Title, timePtr(t.DueAt), timePtr(t.RemindAt), nullStr(t.RecurrencePattern),
 		nullStr(t.RecurrenceTime), timePtr(t.RecurrenceNextDue),
 		boolToInt(t.Completed), timePtr(t.CompletedAt), boolToInt(t.Reminded),
-		marshalTags(t.Tags), t.ID,
+		marshalTags(t.Tags), t.Profile, t.ID,
 	)
 	return err
 }
@@ -269,7 +271,7 @@ func scanTask(s scanner) (task.Task, error) {
 	err := s.Scan(
 		&t.ID, &t.Title, &dueAt, &completed, &completedAt, &t.CreatedAt,
 		&remindAt, &reminded, &recurrencePattern, &recurrenceTime, &recurrenceNextDue,
-		&tagsJSON,
+		&tagsJSON, &t.Profile,
 	)
 	if err != nil {
 		return t, err

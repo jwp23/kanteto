@@ -15,12 +15,16 @@ const DefaultLeadTime = 15 * time.Minute
 type Config struct {
 	ReminderLeadTime time.Duration `toml:"-"`
 	SoundFile        string        `toml:"sound_file"`
+	ActiveProfile    string        `toml:"-"`
+	Backend          string        `toml:"-"`
 }
 
 // tomlConfig is the on-disk representation with string durations.
 type tomlConfig struct {
 	ReminderLeadTime string `toml:"reminder_lead_time"`
 	SoundFile        string `toml:"sound_file"`
+	ActiveProfile    string `toml:"active_profile"`
+	Backend          string `toml:"backend"`
 }
 
 // Load reads config from XDG_CONFIG_HOME/kanteto/config.toml.
@@ -28,6 +32,8 @@ type tomlConfig struct {
 func Load() (Config, error) {
 	cfg := Config{
 		ReminderLeadTime: DefaultLeadTime,
+		ActiveProfile:    "default",
+		Backend:          "sqlite",
 	}
 
 	path := filepath.Join(configDir(), "config.toml")
@@ -52,8 +58,39 @@ func Load() (Config, error) {
 		cfg.ReminderLeadTime = d
 	}
 	cfg.SoundFile = tc.SoundFile
+	if tc.ActiveProfile != "" {
+		cfg.ActiveProfile = tc.ActiveProfile
+	}
+	if tc.Backend != "" {
+		cfg.Backend = tc.Backend
+	}
 
 	return cfg, nil
+}
+
+// Save writes the config to XDG_CONFIG_HOME/kanteto/config.toml.
+func Save(cfg Config) error {
+	dir := configDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	tc := tomlConfig{
+		SoundFile:     cfg.SoundFile,
+		ActiveProfile: cfg.ActiveProfile,
+		Backend:       cfg.Backend,
+	}
+	if cfg.ReminderLeadTime != DefaultLeadTime {
+		tc.ReminderLeadTime = cfg.ReminderLeadTime.String()
+	}
+
+	path := filepath.Join(dir, "config.toml")
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return toml.NewEncoder(f).Encode(tc)
 }
 
 // DataDir returns the XDG-compliant data directory for kanteto.

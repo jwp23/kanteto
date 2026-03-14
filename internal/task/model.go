@@ -19,6 +19,7 @@ type Task struct {
 	// computes live.
 	RecurrenceNextDue *time.Time
 	Tags              []string
+	Profile           string
 }
 
 // IsOverdue returns true if the task has a past due date and is not completed.
