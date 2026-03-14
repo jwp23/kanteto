@@ -79,7 +79,7 @@ func readSQLiteTasks(dsn string) ([]task.Task, error) {
 	defer db.Close()
 
 	rows, err := db.Query(`SELECT id, title, due_at, completed, completed_at, created_at,
-		remind_at, reminded, recurrence_pattern, recurrence_time, recurrence_next_due,
+		recurrence_pattern, recurrence_time,
 		tags, profile FROM tasks`)
 	if err != nil {
 		return nil, err
@@ -89,14 +89,14 @@ func readSQLiteTasks(dsn string) ([]task.Task, error) {
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
-		var dueAt, completedAt, remindAt, recurrenceNextDue sql.NullTime
+		var dueAt, completedAt sql.NullTime
 		var recurrencePattern, recurrenceTime sql.NullString
-		var completed, reminded int
+		var completed int
 		var tagsJSON string
 
 		err := rows.Scan(
 			&t.ID, &t.Title, &dueAt, &completed, &completedAt, &t.CreatedAt,
-			&remindAt, &reminded, &recurrencePattern, &recurrenceTime, &recurrenceNextDue,
+			&recurrencePattern, &recurrenceTime,
 			&tagsJSON, &t.Profile,
 		)
 		if err != nil {
@@ -104,24 +104,17 @@ func readSQLiteTasks(dsn string) ([]task.Task, error) {
 		}
 
 		t.Completed = completed != 0
-		t.Reminded = reminded != 0
 		if dueAt.Valid {
 			t.DueAt = &dueAt.Time
 		}
 		if completedAt.Valid {
 			t.CompletedAt = &completedAt.Time
 		}
-		if remindAt.Valid {
-			t.RemindAt = &remindAt.Time
-		}
 		if recurrencePattern.Valid {
 			t.RecurrencePattern = recurrencePattern.String
 		}
 		if recurrenceTime.Valid {
 			t.RecurrenceTime = recurrenceTime.String
-		}
-		if recurrenceNextDue.Valid {
-			t.RecurrenceNextDue = &recurrenceNextDue.Time
 		}
 		t.Tags = unmarshalTags(tagsJSON)
 		tasks = append(tasks, t)

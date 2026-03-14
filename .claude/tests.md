@@ -17,7 +17,7 @@ Purpose: This file outlines the strategy for testing Kanteto to ensure it works 
 ## 2. Types of Tests We Write
 
 - **Unit Tests:** Yes. Domain model behavior, NLP date parsing, recurrence logic, config loading, urgency color assignment. Table-driven tests are the default pattern.
-- **Integration Tests:** Yes. Full lifecycle workflows (add -> list -> complete -> get), recurring task advancement, CLI command execution with stdout/stderr capture, TUI model updates with simulated keypresses. Build-tagged (`integration`) tests for daemon lifecycle with real goroutines and SQLite WAL concurrency.
+- **Integration Tests:** Yes. Full lifecycle workflows (add -> list -> complete -> get), recurring task advancement, TUI model updates with simulated keypresses. Build-tagged (`integration`) tests for concurrent Dolt access.
 - **End-to-End (E2E) Tests:** No. Kanteto is a local CLI tool with no network dependencies or browser UI.
 
 ### Package Test Map
@@ -25,12 +25,11 @@ Purpose: This file outlines the strategy for testing Kanteto to ensure it works 
 | Package | Test Focus |
 |---|---|
 | `internal/task/` | Model behavior (overdue, due-today), service CRUD, recurrence parsing/advancement, ULID generation, full lifecycle integration |
-| `internal/store/` | CRUD operations, date-range queries, overdue/undated/reminder queries, field updates |
+| `internal/store/` | CRUD operations, date-range queries, overdue/undated queries, field updates, SQL special character round-trips |
 | `internal/nlp/` | Date parsing (month names, relative dates, weekdays, ISO, durations), deadline extraction from natural language |
 | `internal/tui/` | Day/week/month view rendering, keybinding navigation, input modes (add/snooze), cursor movement and clamping, urgency color gradients |
-| `internal/daemon/` | Lifecycle management (PID, start/stop/duplicate prevention), reminder firing and marking, context cancellation, concurrent DB access |
 | `internal/config/` | Default values, TOML file loading, XDG path resolution |
-| `cmd/` | CLI commands (add/done/edit/list/rm/snooze) with happy-path and error-case coverage, flag validation |
+| `cmd/` | `migrate` command with happy-path and error-case coverage |
 
 ---
 
@@ -44,10 +43,9 @@ Purpose: This file outlines the strategy for testing Kanteto to ensure it works 
 ### Key Patterns
 
 - **Table-driven tests** — default for any function with multiple input/output cases (NLP parsing, model predicates, urgency colors, recurrence specs)
-- **In-memory SQLite** — store and service tests use `:memory:` databases with `t.Cleanup()` teardown
+- **Dolt with `t.TempDir()` + `skipIfNoDolt`** — store and service tests create isolated Dolt repos in temp directories, skipping gracefully when dolt is not installed
 - **`t.Helper()`** — all test setup functions are marked as helpers for clean failure output
 - **`t.Setenv()`** — environment variable isolation for config and XDG path tests
-- **CLI exec wrappers** — `execAdd()`, `execDone()`, etc. capture stdout/stderr for assertion
 - **TUI key simulation** — `sendKey()` and `sendSpecialKey()` simulate keypresses against Bubble Tea models
 - **Fixed "now" times** — date-sensitive tests use deterministic reference times
 
@@ -57,10 +55,9 @@ Purpose: This file outlines the strategy for testing Kanteto to ensure it works 
 
 Every user story in `prd.md` must have corresponding test coverage. Rather than a numeric percentage target, we enforce coverage by layer:
 
-- **Store:** Every query method must have a test (CRUD, date-range, overdue, undated, reminders)
+- **Store:** Every query method must have a test (CRUD, date-range, overdue, undated)
 - **Service:** Every public method must have a test (add, complete, delete, snooze, list variants)
-- **CLI:** Every command must have at least one happy-path test and one error-case test
+- **CLI:** The `migrate` command must have happy-path and error-case tests
 - **TUI:** Every view must have rendering tests; every keybinding must have a navigation test
 - **NLP:** Every supported date format must appear in a table-driven test case
-- **Daemon:** Lifecycle operations (start, stop, duplicate prevention) and reminder logic must be tested
 - **Config:** Default loading and file-based overrides must be tested

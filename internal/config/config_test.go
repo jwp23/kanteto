@@ -15,8 +15,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
 	}
-	if cfg.ReminderLeadTime != DefaultLeadTime {
-		t.Errorf("ReminderLeadTime = %v, want %v", cfg.ReminderLeadTime, DefaultLeadTime)
+	if cfg.ActiveProfile != "default" {
+		t.Errorf("ActiveProfile = %q, want %q", cfg.ActiveProfile, "default")
 	}
 }
 
@@ -29,8 +29,7 @@ func TestLoad_FromFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	content := `reminder_lead_time = "30m"
-active_profile = "work"
+	content := `active_profile = "work"
 `
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -39,9 +38,6 @@ active_profile = "work"
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error: %v", err)
-	}
-	if cfg.ReminderLeadTime.String() != "30m0s" {
-		t.Errorf("ReminderLeadTime = %v, want 30m", cfg.ReminderLeadTime)
 	}
 	if cfg.ActiveProfile != "work" {
 		t.Errorf("ActiveProfile = %q, want work", cfg.ActiveProfile)

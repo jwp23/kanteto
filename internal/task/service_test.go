@@ -1,6 +1,7 @@
 package task_test
 
 import (
+	"os/exec"
 	"testing"
 	"time"
 
@@ -8,8 +9,16 @@ import (
 	"github.com/jwp23/kanteto/internal/task"
 )
 
+func skipIfNoDolt(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("dolt"); err != nil {
+		t.Skip("dolt not found on PATH, skipping integration test")
+	}
+}
+
 func newTestService(t *testing.T) *task.Service {
 	t.Helper()
+	skipIfNoDolt(t)
 	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -42,9 +51,6 @@ func TestService_AddWithDueDate(t *testing.T) {
 	}
 	if tk.DueAt == nil {
 		t.Fatal("DueAt is nil, want non-nil")
-	}
-	if tk.RemindAt == nil {
-		t.Fatal("RemindAt should be auto-set when DueAt is set")
 	}
 }
 

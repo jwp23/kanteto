@@ -53,6 +53,9 @@ type model struct {
 	// Pre-fetched tasks for month view (keyed by day of month)
 	monthTasks map[int][]task.Task
 
+	// Pre-fetched tasks for week view (keyed by date string "2006-01-02")
+	weekTasks map[string][]task.Task
+
 	// Active profile name
 	profile string
 
@@ -153,7 +156,11 @@ func (m *model) refreshData() {
 	endOfDay := startOfDay.Add(24 * time.Hour)
 	endOfWeek := endOfDay.AddDate(0, 0, 7)
 
-	all, _ := m.svc.ListAll()
+	all, err := m.svc.ListAll()
+	if err != nil {
+		m.err = err
+		return
+	}
 
 	m.overdue = nil
 	m.today = nil
@@ -198,6 +205,21 @@ func (m *model) refreshData() {
 			if t.DueAt != nil && !t.DueAt.Before(firstOfMonth) && t.DueAt.Before(firstOfNextMonth) {
 				day := t.DueAt.Day()
 				m.monthTasks[day] = append(m.monthTasks[day], t)
+			}
+		}
+	}
+
+	// Pre-compute week tasks from fetched data
+	if m.viewMode == weekView {
+		weekday := now.Weekday()
+		startOfWeek := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		startOfWeek = startOfWeek.AddDate(0, 0, -int(weekday))
+		endOfWeek := startOfWeek.AddDate(0, 0, 7)
+		m.weekTasks = make(map[string][]task.Task)
+		for _, t := range all {
+			if t.DueAt != nil && !t.DueAt.Before(startOfWeek) && t.DueAt.Before(endOfWeek) {
+				key := t.DueAt.Format("2006-01-02")
+				m.weekTasks[key] = append(m.weekTasks[key], t)
 			}
 		}
 	}

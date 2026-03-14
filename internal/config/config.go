@@ -3,32 +3,25 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/BurntSushi/toml"
 )
 
-// DefaultLeadTime is the default reminder lead time before a task is due.
-const DefaultLeadTime = 15 * time.Minute
-
 // Config holds application configuration.
 type Config struct {
-	ReminderLeadTime time.Duration `toml:"-"`
-	ActiveProfile    string        `toml:"-"`
+	ActiveProfile string `toml:"-"`
 }
 
-// tomlConfig is the on-disk representation with string durations.
+// tomlConfig is the on-disk representation.
 type tomlConfig struct {
-	ReminderLeadTime string `toml:"reminder_lead_time"`
-	ActiveProfile    string `toml:"active_profile"`
+	ActiveProfile string `toml:"active_profile"`
 }
 
 // Load reads config from XDG_CONFIG_HOME/kanteto/config.toml.
 // Returns defaults if the file does not exist.
 func Load() (Config, error) {
 	cfg := Config{
-		ReminderLeadTime: DefaultLeadTime,
-		ActiveProfile:    "default",
+		ActiveProfile: "default",
 	}
 
 	path := filepath.Join(configDir(), "config.toml")
@@ -45,13 +38,6 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 
-	if tc.ReminderLeadTime != "" {
-		d, err := time.ParseDuration(tc.ReminderLeadTime)
-		if err != nil {
-			return cfg, err
-		}
-		cfg.ReminderLeadTime = d
-	}
 	if tc.ActiveProfile != "" {
 		cfg.ActiveProfile = tc.ActiveProfile
 	}
@@ -59,28 +45,6 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-// Save writes the config to XDG_CONFIG_HOME/kanteto/config.toml.
-func Save(cfg Config) error {
-	dir := configDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-
-	tc := tomlConfig{
-		ActiveProfile: cfg.ActiveProfile,
-	}
-	if cfg.ReminderLeadTime != DefaultLeadTime {
-		tc.ReminderLeadTime = cfg.ReminderLeadTime.String()
-	}
-
-	path := filepath.Join(dir, "config.toml")
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return toml.NewEncoder(f).Encode(tc)
-}
 
 // DataDir returns the XDG-compliant data directory for kanteto.
 func DataDir() string {

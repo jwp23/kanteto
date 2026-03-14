@@ -36,9 +36,8 @@ func createSQLiteDB(t *testing.T, dbPath string) *sql.DB {
 	CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY, title TEXT NOT NULL, due_at DATETIME,
 		completed INTEGER NOT NULL DEFAULT 0, completed_at DATETIME,
-		created_at DATETIME NOT NULL, remind_at DATETIME,
-		reminded INTEGER NOT NULL DEFAULT 0, recurrence_pattern TEXT,
-		recurrence_time TEXT, recurrence_next_due DATETIME,
+		created_at DATETIME NOT NULL, recurrence_pattern TEXT,
+		recurrence_time TEXT,
 		tags TEXT NOT NULL DEFAULT '[]', profile TEXT NOT NULL DEFAULT 'default'
 	);`
 	if _, err := db.Exec(schema); err != nil {
@@ -49,15 +48,12 @@ func createSQLiteDB(t *testing.T, dbPath string) *sql.DB {
 
 func insertSQLiteTask(t *testing.T, db *sql.DB, tk task.Task) {
 	t.Helper()
-	var dueAt, completedAt, remindAt any
+	var dueAt, completedAt any
 	if tk.DueAt != nil {
 		dueAt = *tk.DueAt
 	}
 	if tk.CompletedAt != nil {
 		completedAt = *tk.CompletedAt
-	}
-	if tk.RemindAt != nil {
-		remindAt = *tk.RemindAt
 	}
 	var recPat, recTime any
 	if tk.RecurrencePattern != "" {
@@ -76,10 +72,10 @@ func insertSQLiteTask(t *testing.T, db *sql.DB, tk task.Task) {
 		completed = 1
 	}
 	_, err := db.Exec(`INSERT INTO tasks (id, title, due_at, completed, completed_at, created_at,
-		remind_at, reminded, recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		recurrence_pattern, recurrence_time, tags, profile)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		tk.ID, tk.Title, dueAt, completed, completedAt, tk.CreatedAt,
-		remindAt, 0, recPat, recTime, nil, tags, tk.Profile)
+		recPat, recTime, tags, tk.Profile)
 	if err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
@@ -97,11 +93,10 @@ func TestMigrate_HappyPath(t *testing.T) {
 
 	now := time.Now().Truncate(time.Second)
 	due := now.Add(2 * time.Hour)
-	remind := now.Add(1 * time.Hour)
 
 	tasks := []task.Task{
 		{ID: task.NewID(), Title: "Simple task", CreatedAt: now, Tags: []string{}},
-		{ID: task.NewID(), Title: "Due task", DueAt: &due, RemindAt: &remind, CreatedAt: now, Tags: []string{}},
+		{ID: task.NewID(), Title: "Due task", DueAt: &due, CreatedAt: now, Tags: []string{}},
 		{ID: task.NewID(), Title: "Tagged task", CreatedAt: now, Tags: []string{"work", "urgent"}},
 		{ID: task.NewID(), Title: "Profiled task", CreatedAt: now, Profile: "work", Tags: []string{}},
 		{ID: task.NewID(), Title: "Recurring task", CreatedAt: now, DueAt: &due, RecurrencePattern: "daily", RecurrenceTime: "9:00", Tags: []string{}},

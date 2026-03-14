@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
@@ -21,7 +22,7 @@ var rootCmd = &cobra.Command{
 	Use:     "kt",
 	Short:   "Kanteto — track small tasks and promises",
 	Long:    "A TUI tool for tracking small tasks and promises that are too small for tickets but still need to get done on time.",
-	Version: "0.2.6",
+	Version: "0.3.0",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return initService()
 	},
@@ -46,11 +47,12 @@ func activeProfile() string {
 
 func initService() error {
 	dataDir := config.DataDir()
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	doltDir := filepath.Join(dataDir, "dolt")
+	if err := os.MkdirAll(doltDir, 0o755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
-	s, err := store.New(dataDir)
+	s, err := store.New(doltDir)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -67,7 +69,6 @@ func initService() error {
 	}
 
 	svc = task.NewService(repo)
-	svc.SetLeadTime(cfg.ReminderLeadTime)
 	return nil
 }
 

@@ -14,8 +14,8 @@ import (
 
 const timeLayout = "2006-01-02 15:04:05"
 
-const taskColumns = `id, title, due_at, completed, completed_at, created_at, remind_at, reminded,
-	recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile`
+const taskColumns = `id, title, due_at, completed, completed_at, created_at,
+	recurrence_pattern, recurrence_time, tags, profile`
 
 // Store is a Dolt-backed task repository that shells out to `dolt sql`.
 type Store struct {
@@ -51,11 +51,8 @@ func (s *Store) initRepo() error {
 		completed           TINYINT(1) NOT NULL DEFAULT 0,
 		completed_at        DATETIME,
 		created_at          DATETIME NOT NULL,
-		remind_at           DATETIME,
-		reminded            TINYINT(1) NOT NULL DEFAULT 0,
 		recurrence_pattern  VARCHAR(255),
 		recurrence_time     VARCHAR(255),
-		recurrence_next_due DATETIME,
 		tags                JSON NOT NULL,
 		profile             VARCHAR(255) NOT NULL DEFAULT 'default'
 	);`
@@ -77,10 +74,10 @@ func (s *Store) Close() error {
 // Create inserts a new task.
 func (s *Store) Create(t task.Task) error {
 	q := fmt.Sprintf(
-		`INSERT INTO tasks (id, title, due_at, completed, created_at, remind_at, recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile)
-		 VALUES (%s, %s, %s, %d, %s, %s, %s, %s, %s, %s, %s)`,
+		`INSERT INTO tasks (id, title, due_at, completed, created_at, recurrence_pattern, recurrence_time, tags, profile)
+		 VALUES (%s, %s, %s, %d, %s, %s, %s, %s, %s)`,
 		quote(t.ID), quote(t.Title), quoteTimePtr(t.DueAt), boolToInt(t.Completed), quoteTime(t.CreatedAt),
-		quoteTimePtr(t.RemindAt), quoteNullStr(t.RecurrencePattern), quoteNullStr(t.RecurrenceTime), quoteTimePtr(t.RecurrenceNextDue),
+		quoteNullStr(t.RecurrencePattern), quoteNullStr(t.RecurrenceTime),
 		quote(marshalTags(t.Tags)), quote(t.Profile),
 	)
 	return s.execSQL(q)
@@ -118,13 +115,13 @@ func (s *Store) Delete(id string) error {
 // Update saves changes to a task.
 func (s *Store) Update(t task.Task) error {
 	q := fmt.Sprintf(
-		`UPDATE tasks SET title = %s, due_at = %s, remind_at = %s, recurrence_pattern = %s,
-		 recurrence_time = %s, recurrence_next_due = %s, completed = %d, completed_at = %s, reminded = %d,
+		`UPDATE tasks SET title = %s, due_at = %s, recurrence_pattern = %s,
+		 recurrence_time = %s, completed = %d, completed_at = %s,
 		 tags = %s, profile = %s
 		 WHERE id = %s`,
-		quote(t.Title), quoteTimePtr(t.DueAt), quoteTimePtr(t.RemindAt), quoteNullStr(t.RecurrencePattern),
-		quoteNullStr(t.RecurrenceTime), quoteTimePtr(t.RecurrenceNextDue),
-		boolToInt(t.Completed), quoteTimePtr(t.CompletedAt), boolToInt(t.Reminded),
+		quote(t.Title), quoteTimePtr(t.DueAt), quoteNullStr(t.RecurrencePattern),
+		quoteNullStr(t.RecurrenceTime),
+		boolToInt(t.Completed), quoteTimePtr(t.CompletedAt),
 		quote(marshalTags(t.Tags)), quote(t.Profile), quote(t.ID),
 	)
 	return s.execSQL(q)
@@ -132,7 +129,7 @@ func (s *Store) Update(t task.Task) error {
 
 // UpdateDueAt changes a task's due date (for snooze).
 func (s *Store) UpdateDueAt(id string, dueAt *time.Time) error {
-	q := fmt.Sprintf(`UPDATE tasks SET due_at = %s, reminded = 0 WHERE id = %s`, quoteTimePtr(dueAt), quote(id))
+	q := fmt.Sprintf(`UPDATE tasks SET due_at = %s WHERE id = %s`, quoteTimePtr(dueAt), quote(id))
 	return s.execSQL(q)
 }
 
@@ -180,21 +177,6 @@ func (s *Store) ListUndated() ([]task.Task, error) {
 		taskColumns,
 	)
 	return s.queryTasks(q)
-}
-
-// ListDueReminders returns tasks that need reminders fired.
-func (s *Store) ListDueReminders() ([]task.Task, error) {
-	q := fmt.Sprintf(
-		`SELECT %s FROM tasks WHERE completed = 0 AND reminded = 0 AND remind_at IS NOT NULL AND remind_at <= %s ORDER BY remind_at ASC`,
-		taskColumns, quoteTime(time.Now()),
-	)
-	return s.queryTasks(q)
-}
-
-// MarkReminded sets the reminded flag on a task.
-func (s *Store) MarkReminded(id string) error {
-	q := fmt.Sprintf(`UPDATE tasks SET reminded = 1 WHERE id = %s`, quote(id))
-	return s.execSQL(q)
 }
 
 // ListProfiles returns distinct profile names from all tasks.
@@ -302,11 +284,8 @@ func rowToTask(row map[string]any) (task.Task, error) {
 		t.CreatedAt = parsed
 	}
 
-	t.RemindAt = timeVal(row, "remind_at")
-	t.Reminded = intBool(row, "reminded")
 	t.RecurrencePattern = strVal(row, "recurrence_pattern")
 	t.RecurrenceTime = strVal(row, "recurrence_time")
-	t.RecurrenceNextDue = timeVal(row, "recurrence_next_due")
 	t.Tags = tagsVal(row, "tags")
 	t.Profile = strVal(row, "profile")
 

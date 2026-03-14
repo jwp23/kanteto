@@ -8,7 +8,7 @@ Purpose: This file describes the project's technical foundation, including the p
 
 - **Programming Language:** Go 1.26 (latest stable)
 - **Main Framework/Tool:** Cobra (CLI), Bubble Tea (TUI), Lip Gloss (styling)
-- **A Quick Summary:** A single-binary CLI + TUI tool for tracking micro-tasks with recurring schedules and audible reminders. See `prd.md` for full feature details.
+- **A Quick Summary:** A single-binary CLI + TUI tool for tracking micro-tasks with recurring schedules. See `prd.md` for full feature details.
 
 ---
 
@@ -29,7 +29,6 @@ Purpose: This file describes the project's technical foundation, including the p
   - **`internal/task/`:** Domain model (`model.go`), business logic (`service.go`), recurrence computation (`recurrence.go`), and ULID generation (`id.go`).
   - **`internal/store/`:** Dolt-backed repository. Shells out to `dolt sql` for queries; auto-initializes the Dolt repo on first use.
   - **`internal/tui/`:** Bubble Tea models and views. `app.go` is the main model; `day.go`, `week.go`, `month.go` are view renderers; `styles.go` defines the urgency gradient and Lip Gloss styles.
-  - **`internal/daemon/`:** Background reminder process. Wakes every 30 seconds, checks for due reminders, plays sound.
   - **`internal/nlp/`:** Natural language date parsing. Handles "march 11", "tomorrow", "weekdays at 4pm", etc.
   - **`internal/config/`:** XDG-compliant configuration loading from `~/.config/kanteto/config.toml`.
   - **`internal/sync/`:** Dolt sync operations (push/pull/remote management). Thin wrapper around `dolt` CLI commands.
@@ -69,4 +68,4 @@ When writing or modifying code, adhere to the following standards:
   - The daemon PID file lives at `~/.local/share/kanteto/daemon.pid`.
   - User configuration lives at `~/.config/kanteto/config.toml` (entirely optional).
 - **Schema Details (MySQL dialect):**
-  - `tasks` table: `id` (VARCHAR(255) PK, ULID), `title` (VARCHAR(1024)), `due_at` (DATETIME nullable), `completed` (TINYINT(1)), `completed_at` (DATETIME nullable), `created_at` (DATETIME), `remind_at` (DATETIME nullable), `reminded` (TINYINT(1)), `recurrence_pattern` (VARCHAR(255) nullable), `recurrence_time` (VARCHAR(255) nullable), `recurrence_next_due` (DATETIME nullable), `tags` (JSON), `profile` (VARCHAR(255) default 'default').
+  - `tasks` table: `id` (VARCHAR(255) PK, ULID), `title` (VARCHAR(1024)), `due_at` (DATETIME nullable), `completed` (TINYINT(1)), `completed_at` (DATETIME nullable), `created_at` (DATETIME), `recurrence_pattern` (VARCHAR(255) nullable), `recurrence_time` (VARCHAR(255) nullable), `tags` (JSON), `profile` (VARCHAR(255) default 'default').

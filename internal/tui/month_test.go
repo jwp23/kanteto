@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -10,8 +11,16 @@ import (
 	"github.com/jwp23/kanteto/internal/task"
 )
 
+func skipIfNoDolt(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("dolt"); err != nil {
+		t.Skip("dolt not found on PATH, skipping integration test")
+	}
+}
+
 func testService(t *testing.T) *task.Service {
 	t.Helper()
+	skipIfNoDolt(t)
 	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
