@@ -52,6 +52,10 @@ type model struct {
 	untagging  bool
 	untagInput string
 
+	// Reparse confirmation
+	reparseConfirm bool
+	reparseResult  string
+
 	// Week view cursor (0=Sunday, 6=Saturday)
 	weekCursorDay int
 
@@ -138,6 +142,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
+		}
+
+		if m.reparseConfirm {
+			return m.handleReparseConfirm(msg)
 		}
 
 		if m.adding {
@@ -243,6 +251,7 @@ func (m *model) refreshData() {
 
 func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.err = nil
+	m.reparseResult = ""
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -379,6 +388,32 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.refreshData()
 		return m, nil
 
+	case "R":
+		undated, err := m.svc.ListUndated()
+		if err != nil {
+			m.err = err
+			return m, nil
+		}
+		if len(undated) == 0 {
+			m.reparseResult = "No undated tasks to reparse"
+			return m, nil
+		}
+		// Count how many have extractable deadlines
+		count := 0
+		for _, tk := range undated {
+			_, dueAt := nlp.ExtractDeadline(tk.Title)
+			if dueAt != nil {
+				count++
+			}
+		}
+		if count == 0 {
+			m.reparseResult = fmt.Sprintf("Scanned %d undated tasks — no deadlines found", len(undated))
+			return m, nil
+		}
+		m.reparseConfirm = true
+		m.reparseResult = fmt.Sprintf("Found %d/%d tasks with deadlines. Press y to reparse, esc to cancel", count, len(undated))
+		return m, nil
+
 	case "?":
 		m.showHelp = true
 		return m, nil
@@ -513,6 +548,28 @@ func (m model) handleSnoozeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+}
+
+func (m model) handleReparseConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y":
+		result, err := m.svc.Reparse()
+		if err != nil {
+			m.err = err
+		} else {
+			m.reparseResult = fmt.Sprintf("Reparsed: %d/%d tasks updated", result.Updated, result.Total)
+		}
+		m.reparseConfirm = false
+		m.refreshData()
+		return m, nil
+
+	case "esc", "n":
+		m.reparseConfirm = false
+		m.reparseResult = ""
+		return m, nil
+	}
+
+	return m, nil
 }
 
 func (m model) handleTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -663,6 +720,10 @@ func renderFooter(m model) string {
 		return fmt.Sprintf("  remove tag: %s█  (enter to remove, esc to cancel)", m.untagInput)
 	}
 
+	if m.reparseResult != "" {
+		return fmt.Sprintf("  %s", m.reparseResult)
+	}
+
 	viewIndicator := "[d]ay [w]eek [m]onth"
 	switch m.viewMode {
 	case dayView:
@@ -707,6 +768,7 @@ func renderHelp(m model) string {
     s           Snooze task
     t           Add tag
     T           Remove tag
+    R           Reparse undated tasks
     x / delete  Delete task
     ?           Toggle help
     q           Quit
