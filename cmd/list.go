@@ -104,10 +104,14 @@ func fprintTasks(w io.Writer, tasks []task.Task) {
 	for _, t := range tasks {
 		id := t.ID[:8]
 		if t.DueAt != nil {
-			fmt.Fprintf(w, "  %s  %s  (due %s)\n", id, t.Title, t.DueAt.Format("Mon Jan 2 3:04PM"))
+			fmt.Fprintf(w, "  %s  %s  (due %s)", id, t.Title, t.DueAt.Format("Mon Jan 2 3:04PM"))
 		} else {
-			fmt.Fprintf(w, "  %s  %s\n", id, t.Title)
+			fmt.Fprintf(w, "  %s  %s", id, t.Title)
 		}
+		if len(t.Tags) > 0 {
+			fmt.Fprintf(w, " %s", formatTags(t.Tags))
+		}
+		fmt.Fprintln(w)
 	}
 }
 
