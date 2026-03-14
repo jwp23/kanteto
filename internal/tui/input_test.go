@@ -189,7 +189,7 @@ func TestEditInput_Escape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !updated.DueAt.Equal(due) {
+	if updated.DueAt.Truncate(time.Second) != due.Truncate(time.Second) {
 		t.Errorf("DueAt should be unchanged, was %v now %v", due, updated.DueAt)
 	}
 }
@@ -232,7 +232,7 @@ func TestSnoozeInput_Escape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !updated.DueAt.Equal(due) {
+	if updated.DueAt.Truncate(time.Second) != due.Truncate(time.Second) {
 		t.Errorf("DueAt should be unchanged, was %v now %v", due, updated.DueAt)
 	}
 }

@@ -25,7 +25,7 @@ func (p *mockPlayer) Play(soundFile string) {
 
 func testSvc(t *testing.T) *task.Service {
 	t.Helper()
-	s, err := store.New(":memory:")
+	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

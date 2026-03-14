@@ -10,11 +10,10 @@ import (
 
 func newTestService(t *testing.T) *task.Service {
 	t.Helper()
-	s, err := store.New(":memory:")
+	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.Close() })
 	return task.NewService(s)
 }
 

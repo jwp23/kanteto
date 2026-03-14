@@ -6,7 +6,6 @@ import (
 
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
-	"github.com/jwp23/kanteto/internal/store/doltstore"
 	"github.com/jwp23/kanteto/internal/task"
 	"github.com/jwp23/kanteto/internal/tui"
 	"github.com/spf13/cobra"
@@ -52,7 +51,7 @@ func initService() error {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
-	s, err := doltstore.New(dataDir)
+	s, err := store.New(dataDir)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

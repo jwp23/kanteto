@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,48 +12,100 @@ import (
 	"time"
 
 	"github.com/jwp23/kanteto/internal/store"
-	"github.com/jwp23/kanteto/internal/store/doltstore"
 	"github.com/jwp23/kanteto/internal/task"
+
+	_ "modernc.org/sqlite"
 )
+
+func createSQLiteDB(t *testing.T, dbPath string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+
+	schema := `
+	CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
+	CREATE TABLE IF NOT EXISTS tasks (
+		id TEXT PRIMARY KEY, title TEXT NOT NULL, due_at DATETIME,
+		completed INTEGER NOT NULL DEFAULT 0, completed_at DATETIME,
+		created_at DATETIME NOT NULL, remind_at DATETIME,
+		reminded INTEGER NOT NULL DEFAULT 0, recurrence_pattern TEXT,
+		recurrence_time TEXT, recurrence_next_due DATETIME,
+		tags TEXT NOT NULL DEFAULT '[]', profile TEXT NOT NULL DEFAULT 'default'
+	);`
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	return db
+}
+
+func insertSQLiteTask(t *testing.T, db *sql.DB, tk task.Task) {
+	t.Helper()
+	var dueAt, completedAt, remindAt any
+	if tk.DueAt != nil {
+		dueAt = *tk.DueAt
+	}
+	if tk.CompletedAt != nil {
+		completedAt = *tk.CompletedAt
+	}
+	if tk.RemindAt != nil {
+		remindAt = *tk.RemindAt
+	}
+	var recPat, recTime any
+	if tk.RecurrencePattern != "" {
+		recPat = tk.RecurrencePattern
+	}
+	if tk.RecurrenceTime != "" {
+		recTime = tk.RecurrenceTime
+	}
+	tags := "[]"
+	if len(tk.Tags) > 0 {
+		data, _ := json.Marshal(tk.Tags)
+		tags = string(data)
+	}
+	completed := 0
+	if tk.Completed {
+		completed = 1
+	}
+	_, err := db.Exec(`INSERT INTO tasks (id, title, due_at, completed, completed_at, created_at,
+		remind_at, reminded, recurrence_pattern, recurrence_time, recurrence_next_due, tags, profile)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		tk.ID, tk.Title, dueAt, completed, completedAt, tk.CreatedAt,
+		remindAt, 0, recPat, recTime, nil, tags, tk.Profile)
+	if err != nil {
+		t.Fatalf("insert task: %v", err)
+	}
+}
 
 func TestMigrate_HappyPath(t *testing.T) {
 	skipIfNoDolt(t)
 
-	// Create a temp directory structure
 	parentDir := t.TempDir()
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
 
-	// Create SQLite store with some tasks
 	dbPath := filepath.Join(dataDir, "kanteto.db")
-	sqliteStore, err := store.New(dbPath)
-	if err != nil {
-		t.Fatalf("create SQLite store: %v", err)
-	}
+	db := createSQLiteDB(t, dbPath)
 
 	now := time.Now().Truncate(time.Second)
 	due := now.Add(2 * time.Hour)
 	remind := now.Add(1 * time.Hour)
 
 	tasks := []task.Task{
-		{ID: task.NewID(), Title: "Simple task", CreatedAt: now},
-		{ID: task.NewID(), Title: "Due task", DueAt: &due, RemindAt: &remind, CreatedAt: now},
+		{ID: task.NewID(), Title: "Simple task", CreatedAt: now, Tags: []string{}},
+		{ID: task.NewID(), Title: "Due task", DueAt: &due, RemindAt: &remind, CreatedAt: now, Tags: []string{}},
 		{ID: task.NewID(), Title: "Tagged task", CreatedAt: now, Tags: []string{"work", "urgent"}},
-		{ID: task.NewID(), Title: "Profiled task", CreatedAt: now, Profile: "work"},
-		{ID: task.NewID(), Title: "Recurring task", CreatedAt: now, DueAt: &due, RecurrencePattern: "daily", RecurrenceTime: "9:00"},
+		{ID: task.NewID(), Title: "Profiled task", CreatedAt: now, Profile: "work", Tags: []string{}},
+		{ID: task.NewID(), Title: "Recurring task", CreatedAt: now, DueAt: &due, RecurrencePattern: "daily", RecurrenceTime: "9:00", Tags: []string{}},
+		{ID: task.NewID(), Title: "Done task", Completed: true, CompletedAt: &now, CreatedAt: now, Tags: []string{}},
 	}
-	for _, tk := range tasks {
-		if err := sqliteStore.Create(tk); err != nil {
-			t.Fatalf("create task: %v", err)
-		}
-	}
-	// Complete one task
-	completedID := task.NewID()
-	sqliteStore.Create(task.Task{ID: completedID, Title: "Done task", CreatedAt: now})
-	sqliteStore.Complete(completedID)
-	sqliteStore.Close()
 
-	// Run migration
+	for _, tk := range tasks {
+		insertSQLiteTask(t, db, tk)
+	}
+	db.Close()
+
 	t.Setenv("XDG_DATA_HOME", parentDir)
 	out, err := execMigrate(t, parentDir)
 	if err != nil {
@@ -63,7 +117,7 @@ func TestMigrate_HappyPath(t *testing.T) {
 
 	// Verify tasks in Dolt
 	doltDir := filepath.Join(dataDir, "dolt")
-	ds, err := doltstore.New(doltDir)
+	ds, err := store.New(doltDir)
 	if err != nil {
 		t.Fatalf("open dolt store: %v", err)
 	}
@@ -76,7 +130,6 @@ func TestMigrate_HappyPath(t *testing.T) {
 		t.Fatalf("expected 6 tasks in dolt, got %d", len(all))
 	}
 
-	// Verify specific fields round-trip
 	for _, tk := range all {
 		switch tk.Title {
 		case "Tagged task":
@@ -118,11 +171,10 @@ func TestMigrate_AlreadyMigrated(t *testing.T) {
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
 
-	// Create SQLite store
+	// Create SQLite DB
 	dbPath := filepath.Join(dataDir, "kanteto.db")
-	sqliteStore, _ := store.New(dbPath)
-	sqliteStore.Create(task.Task{ID: task.NewID(), Title: "Test", CreatedAt: time.Now()})
-	sqliteStore.Close()
+	db := createSQLiteDB(t, dbPath)
+	db.Close()
 
 	// Pre-create dolt dir
 	doltDir := filepath.Join(dataDir, "dolt")

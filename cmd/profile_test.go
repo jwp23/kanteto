@@ -13,7 +13,7 @@ import (
 
 func setupProfileTest(t *testing.T) (*task.Service, *store.Store) {
 	t.Helper()
-	s, err := store.New(":memory:")
+	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

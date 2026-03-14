@@ -15,7 +15,7 @@ import (
 
 func integrationSvc(t *testing.T) *task.Service {
 	t.Helper()
-	s, err := store.New(":memory:")
+	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,13 +114,7 @@ func TestDaemon_ConcurrentAccess(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", tmp)
 
-	// Use a file-backed SQLite DB for WAL testing
-	dbPath := tmp + "/kanteto/test.db"
-	if err := os.MkdirAll(tmp+"/kanteto", 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	s, err := store.New(dbPath)
+	s, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
