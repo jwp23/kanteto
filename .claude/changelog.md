@@ -49,6 +49,10 @@ This ensures transparency and traceability for all AI-executed workflows.
 ### Fixed
 
 - `root.go` data directory now uses `dolt/` subdirectory, matching `migrate.go` — TUI sees migrated data (`kanteto-dxm`).
+- Broken `make smoke` target — removed references to deleted CLI commands, now tests `--version` and `--help` only (`kanteto-i36`).
+- DB query inside `View()` in `week.go` — moved `ListByDateRange` call to `refreshData()` pre-fetch, matching the `monthTasks` pattern (`kanteto-61q`).
+- `ListAll` error silently discarded in `refreshData()` — now surfaced to TUI footer (`kanteto-bg7`).
+- Missing `skipIfNoDolt` guard in `tui` and `task` test helpers — tests now skip gracefully without dolt (`kanteto-7w7`).
 
 ### Removed
 
@@ -65,6 +69,15 @@ This ensures transparency and traceability for all AI-executed workflows.
 - `kanteto-dxm` (bug): Fix data directory path in root.go
 - `kanteto-ouy` (task): Remove vestigial ReminderLeadTime and remind_at system
 - `kanteto-wdm` (task): Bump version string to 0.3.0
+- `kanteto-63h` (chore): Update go.mod Go version to 1.26.1
+- `kanteto-rq0` (chore): Remove dead `config.Save()`
+- `kanteto-i36` (bug): Fix broken make smoke target
+- `kanteto-7w7` (bug): Add skipIfNoDolt guard to task and TUI test helpers
+- `kanteto-bg7` (bug): Surface ListAll error in refreshData()
+- `kanteto-61q` (bug): Move DB query out of View() in week.go
+- `kanteto-ryg` (task): Add SQL special character round-trip test
+- `kanteto-1z0` (chore): Remove unused RecurrenceNextDue field
+- `kanteto-73s` (task): Update security.md and tests.md for v0.3.0
 
 ### Changed
 
@@ -77,6 +90,17 @@ This ensures transparency and traceability for all AI-executed workflows.
 ### Added
 
 - `internal/sync/` package: thin wrapper around `dolt add/commit/push/pull/remote` commands.
+- SQL special character round-trip test for `quote()` escaping (`kanteto-ryg`).
+
+### Removed (cleanup session)
+
+- Dead `config.Save()` function — no callers remain after CLI removal (`kanteto-rq0`).
+- `RecurrenceNextDue` field from model, store, migration, and schema docs — unused caching optimization (`kanteto-1z0`).
+
+### Changed (cleanup session)
+
+- `go.mod` Go version bumped from 1.25.0 to 1.26.1 (`kanteto-63h`).
+- `security.md` and `tests.md` updated for v0.3.0 Dolt-only architecture (`kanteto-73s`).
 - `kt migrate` — one-time migration from SQLite (`kanteto.db`) to Dolt. Reads all tasks including completed, writes to `dolt/` subdirectory, creates initial commit.
 - 78 new tests across doltstore, sync, and migration (225 total, up from 147).
 - README: prerequisites section, migrate command docs, Dolt sync instructions.
