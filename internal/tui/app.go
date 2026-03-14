@@ -153,7 +153,11 @@ func (m *model) refreshData() {
 	endOfDay := startOfDay.Add(24 * time.Hour)
 	endOfWeek := endOfDay.AddDate(0, 0, 7)
 
-	all, _ := m.svc.ListAll()
+	all, err := m.svc.ListAll()
+	if err != nil {
+		m.err = err
+		return
+	}
 
 	m.overdue = nil
 	m.today = nil
