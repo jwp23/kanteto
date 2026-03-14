@@ -2,6 +2,8 @@ package task
 
 import (
 	"time"
+
+	"github.com/jwp23/kanteto/internal/nlp"
 )
 
 // Repository defines the storage contract for tasks.
@@ -194,6 +196,38 @@ func (svc *Service) SetDueAt(id string, dueAt time.Time) error {
 	}
 	t.DueAt = &dueAt
 	return svc.repo.Update(t)
+}
+
+// ReparseResult holds the outcome of a reparse operation.
+type ReparseResult struct {
+	Updated int
+	Total   int
+}
+
+// Reparse scans undated tasks for inline deadlines, updating title and DueAt
+// for any matches found.
+func (svc *Service) Reparse() (ReparseResult, error) {
+	undated, err := svc.repo.ListUndated()
+	if err != nil {
+		return ReparseResult{}, err
+	}
+
+	var result ReparseResult
+	result.Total = len(undated)
+
+	for _, t := range undated {
+		title, dueAt := nlp.ExtractDeadline(t.Title)
+		if dueAt != nil {
+			t.Title = title
+			t.DueAt = dueAt
+			if err := svc.repo.Update(t); err != nil {
+				return result, err
+			}
+			result.Updated++
+		}
+	}
+
+	return result, nil
 }
 
 // Update saves changes to a task.

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,6 +9,13 @@ import (
 	"github.com/jwp23/kanteto/internal/nlp"
 	"github.com/jwp23/kanteto/internal/task"
 )
+
+// Syncer provides sync operations for the TUI.
+type Syncer interface {
+	Push() error
+	Pull() error
+	HasRemote(name string) bool
+}
 
 type viewMode int
 
@@ -44,6 +52,18 @@ type model struct {
 	editing   bool
 	editInput string
 
+	// Tag mode
+	tagging  bool
+	tagInput string
+
+	// Untag mode
+	untagging  bool
+	untagInput string
+
+	// Reparse confirmation
+	reparseConfirm bool
+	reparseResult  string
+
 	// Week view cursor (0=Sunday, 6=Saturday)
 	weekCursorDay int
 
@@ -62,6 +82,10 @@ type model struct {
 	// Midnight detection
 	lastDate int // YearDay of the last known date
 
+	// Sync
+	syncer     Syncer
+	syncStatus string
+
 	// Help overlay
 	showHelp bool
 
@@ -74,9 +98,14 @@ type model struct {
 
 type refreshMsg struct{}
 type tickMsg time.Time
+type syncResultMsg struct {
+	op  string
+	err error
+}
+type clearSyncMsg struct{}
 
 // New creates and returns the Bubble Tea program.
-func New(svc *task.Service, profile string) *tea.Program {
+func New(svc *task.Service, profile string, syncer Syncer) *tea.Program {
 	now := time.Now()
 	m := model{
 		svc:      svc,
@@ -84,6 +113,7 @@ func New(svc *task.Service, profile string) *tea.Program {
 		viewDate: now,
 		lastDate: now.YearDay(),
 		profile:  profile,
+		syncer:   syncer,
 	}
 	return tea.NewProgram(m, tea.WithAltScreen())
 }
@@ -126,10 +156,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tickEvery(time.Minute)
 
+	case syncResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.syncStatus = ""
+		} else {
+			switch msg.op {
+			case "push":
+				m.syncStatus = "Push complete"
+			case "pull":
+				m.syncStatus = "Pull complete"
+				m.refreshData()
+			}
+		}
+		return m, clearSyncStatusAfter(3 * time.Second)
+
+	case clearSyncMsg:
+		m.syncStatus = ""
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
+		}
+
+		if m.reparseConfirm {
+			return m.handleReparseConfirm(msg)
 		}
 
 		if m.adding {
@@ -142,6 +195,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.editing {
 			return m.handleEditInput(msg)
+		}
+
+		if m.tagging {
+			return m.handleTagInput(msg)
+		}
+
+		if m.untagging {
+			return m.handleUntagInput(msg)
 		}
 
 		return m.handleKeypress(msg)
@@ -227,6 +288,7 @@ func (m *model) refreshData() {
 
 func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.err = nil
+	m.reparseResult = ""
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -345,9 +407,73 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "t":
+		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
+			m.tagging = true
+			m.tagInput = ""
+		}
+		return m, nil
+
+	case "T":
+		if len(m.allTasks) > 0 && m.cursor < len(m.allTasks) {
+			m.untagging = true
+			m.untagInput = ""
+		}
+		return m, nil
+
+	case ".":
 		m.viewDate = time.Now()
 		m.refreshData()
 		return m, nil
+
+	case "R":
+		undated, err := m.svc.ListUndated()
+		if err != nil {
+			m.err = err
+			return m, nil
+		}
+		if len(undated) == 0 {
+			m.reparseResult = "No undated tasks to reparse"
+			return m, nil
+		}
+		// Count how many have extractable deadlines
+		count := 0
+		for _, tk := range undated {
+			_, dueAt := nlp.ExtractDeadline(tk.Title)
+			if dueAt != nil {
+				count++
+			}
+		}
+		if count == 0 {
+			m.reparseResult = fmt.Sprintf("Scanned %d undated tasks — no deadlines found", len(undated))
+			return m, nil
+		}
+		m.reparseConfirm = true
+		m.reparseResult = fmt.Sprintf("Found %d/%d tasks with deadlines. Press y to reparse, esc to cancel", count, len(undated))
+		return m, nil
+
+	case "P":
+		if m.syncer == nil {
+			m.err = errors.New("sync not available")
+			return m, nil
+		}
+		if !m.syncer.HasRemote("origin") {
+			m.err = errors.New("no remote configured")
+			return m, nil
+		}
+		m.syncStatus = "Pushing..."
+		return m, m.doPush()
+
+	case "p":
+		if m.syncer == nil {
+			m.err = errors.New("sync not available")
+			return m, nil
+		}
+		if !m.syncer.HasRemote("origin") {
+			m.err = errors.New("no remote configured")
+			return m, nil
+		}
+		m.syncStatus = "Pulling..."
+		return m, m.doPull()
 
 	case "?":
 		m.showHelp = true
@@ -355,6 +481,28 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m model) doPush() tea.Cmd {
+	syncer := m.syncer
+	return func() tea.Msg {
+		err := syncer.Push()
+		return syncResultMsg{op: "push", err: err}
+	}
+}
+
+func (m model) doPull() tea.Cmd {
+	syncer := m.syncer
+	return func() tea.Msg {
+		err := syncer.Pull()
+		return syncResultMsg{op: "pull", err: err}
+	}
+}
+
+func clearSyncStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return clearSyncMsg{}
+	})
 }
 
 func (m model) timeNav(dir int) model {
@@ -485,6 +633,94 @@ func (m model) handleSnoozeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m model) handleReparseConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y":
+		result, err := m.svc.Reparse()
+		if err != nil {
+			m.err = err
+		} else {
+			m.reparseResult = fmt.Sprintf("Reparsed: %d/%d tasks updated", result.Updated, result.Total)
+		}
+		m.reparseConfirm = false
+		m.refreshData()
+		return m, nil
+
+	case "esc", "n":
+		m.reparseConfirm = false
+		m.reparseResult = ""
+		return m, nil
+	}
+
+	return m, nil
+}
+
+func (m model) handleTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.tagInput != "" {
+			t := m.allTasks[m.cursor]
+			if err := m.svc.AddTag(t.ID, m.tagInput); err != nil {
+				m.err = err
+			}
+			m.refreshData()
+		}
+		m.tagging = false
+		m.tagInput = ""
+		return m, nil
+
+	case "esc":
+		m.tagging = false
+		m.tagInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.tagInput) > 0 {
+			m.tagInput = m.tagInput[:len(m.tagInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.String()) == 1 {
+			m.tagInput += msg.String()
+		}
+		return m, nil
+	}
+}
+
+func (m model) handleUntagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		if m.untagInput != "" {
+			t := m.allTasks[m.cursor]
+			if err := m.svc.RemoveTag(t.ID, m.untagInput); err != nil {
+				m.err = err
+			}
+			m.refreshData()
+		}
+		m.untagging = false
+		m.untagInput = ""
+		return m, nil
+
+	case "esc":
+		m.untagging = false
+		m.untagInput = ""
+		return m, nil
+
+	case "backspace":
+		if len(m.untagInput) > 0 {
+			m.untagInput = m.untagInput[:len(m.untagInput)-1]
+		}
+		return m, nil
+
+	default:
+		if len(msg.String()) == 1 {
+			m.untagInput += msg.String()
+		}
+		return m, nil
+	}
+}
+
 func (m model) handleEditInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
@@ -559,6 +795,22 @@ func renderFooter(m model) string {
 		return fmt.Sprintf("  new deadline: %s█  (e.g. friday 3pm, tomorrow, march 15)", m.editInput)
 	}
 
+	if m.tagging {
+		return fmt.Sprintf("  tag: %s█  (enter to add, esc to cancel)", m.tagInput)
+	}
+
+	if m.untagging {
+		return fmt.Sprintf("  remove tag: %s█  (enter to remove, esc to cancel)", m.untagInput)
+	}
+
+	if m.reparseResult != "" {
+		return fmt.Sprintf("  %s", m.reparseResult)
+	}
+
+	if m.syncStatus != "" {
+		return fmt.Sprintf("  %s", m.syncStatus)
+	}
+
 	viewIndicator := "[d]ay [w]eek [m]onth"
 	switch m.viewMode {
 	case dayView:
@@ -569,12 +821,12 @@ func renderFooter(m model) string {
 		viewIndicator = "[d]ay [w]eek [M]onth"
 	}
 
-	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  h/l:nav  t:today  ?:help  q:quit"
+	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  t:tag  T:untag  p:pull  P:push  h/l:nav  .:today  ?:help  q:quit"
 	if m.viewMode == weekView {
-		keys = "j/k:day  ←/→:day  enter:open  h/l:week  a:add  t:today  ?:help  q:quit"
+		keys = "j/k:day  ←/→:day  enter:open  h/l:week  a:add  .:today  ?:help  q:quit"
 	}
 	if m.viewMode == monthView {
-		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  t:today  ?:help  q:quit"
+		keys = "j/k:week  ←/→:day  enter:open  h/l:month  a:add  .:today  ?:help  q:quit"
 	}
 	return helpStyle.Render(fmt.Sprintf("  %s  |  %s", viewIndicator, keys))
 }
@@ -588,7 +840,7 @@ func renderHelp(m model) string {
     k / ↑       Move up (day in week view, week in month view)
     ← / →       Move by day in week/month view
     h / l       Previous/next day, week, or month
-    t           Jump to today
+    .           Jump to today
     enter       Open selected day (week/month view)
 
   Views
@@ -601,6 +853,11 @@ func renderHelp(m model) string {
     a           Add new task
     e           Edit deadline
     s           Snooze task
+    t           Add tag
+    T           Remove tag
+    R           Reparse undated tasks
+    p           Pull from remote
+    P           Push to remote
     x / delete  Delete task
     ?           Toggle help
     q           Quit

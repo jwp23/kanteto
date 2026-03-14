@@ -177,3 +177,73 @@ func TestService_ListToday(t *testing.T) {
 		t.Errorf("expected 1 today task, got %d", len(tasks))
 	}
 }
+
+func TestService_Reparse(t *testing.T) {
+	svc := newTestService(t)
+
+	// Undated task with extractable deadline
+	svc.Add("deploy service tomorrow", nil)
+	// Undated task without extractable deadline
+	svc.Add("think about life", nil)
+
+	result, err := svc.Reparse()
+	if err != nil {
+		t.Fatalf("Reparse() error: %v", err)
+	}
+
+	if result.Total != 2 {
+		t.Errorf("Total = %d, want 2", result.Total)
+	}
+	if result.Updated != 1 {
+		t.Errorf("Updated = %d, want 1", result.Updated)
+	}
+
+	// The updated task should have a DueAt and stripped title
+	tasks, _ := svc.ListAll()
+	var found bool
+	for _, tk := range tasks {
+		if tk.Title == "deploy service" {
+			found = true
+			if tk.DueAt == nil {
+				t.Error("expected DueAt to be set after reparse")
+			}
+		}
+	}
+	if !found {
+		t.Error("expected to find task with stripped title 'deploy service'")
+	}
+}
+
+func TestService_Reparse_NoUndated(t *testing.T) {
+	svc := newTestService(t)
+
+	now := time.Now()
+	due := now.Add(time.Hour)
+	svc.Add("has a date", &due)
+
+	result, err := svc.Reparse()
+	if err != nil {
+		t.Fatalf("Reparse() error: %v", err)
+	}
+	if result.Total != 0 || result.Updated != 0 {
+		t.Errorf("expected 0/0, got %d/%d", result.Updated, result.Total)
+	}
+}
+
+func TestService_Reparse_NoMatches(t *testing.T) {
+	svc := newTestService(t)
+
+	svc.Add("no deadline here", nil)
+	svc.Add("also nothing", nil)
+
+	result, err := svc.Reparse()
+	if err != nil {
+		t.Fatalf("Reparse() error: %v", err)
+	}
+	if result.Total != 2 {
+		t.Errorf("Total = %d, want 2", result.Total)
+	}
+	if result.Updated != 0 {
+		t.Errorf("Updated = %d, want 0", result.Updated)
+	}
+}
