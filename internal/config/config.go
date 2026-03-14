@@ -45,25 +45,6 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
-// Save writes the config to XDG_CONFIG_HOME/kanteto/config.toml.
-func Save(cfg Config) error {
-	dir := configDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-
-	tc := tomlConfig{
-		ActiveProfile: cfg.ActiveProfile,
-	}
-
-	path := filepath.Join(dir, "config.toml")
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return toml.NewEncoder(f).Encode(tc)
-}
 
 // DataDir returns the XDG-compliant data directory for kanteto.
 func DataDir() string {
