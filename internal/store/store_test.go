@@ -466,6 +466,27 @@ func TestStore_ListProfiles(t *testing.T) {
 	}
 }
 
+func TestStore_SQLSpecialCharRoundTrip(t *testing.T) {
+	s := newTestStore(t)
+
+	tk := task.Task{
+		ID:        task.NewID(),
+		Title:     "Call O'Brien",
+		CreatedAt: time.Now(),
+	}
+	if err := s.Create(tk); err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	got, err := s.Get(tk.ID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
+	if got.Title != "Call O'Brien" {
+		t.Errorf("Title = %q, want %q", got.Title, "Call O'Brien")
+	}
+}
+
 func TestStore_Close(t *testing.T) {
 	s := newTestStore(t)
 	if err := s.Close(); err != nil {
