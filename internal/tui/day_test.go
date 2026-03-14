@@ -154,6 +154,43 @@ func TestRenderTask_CursorPrefix(t *testing.T) {
 	}
 }
 
+func TestRenderTask_WithTags(t *testing.T) {
+	now := time.Now()
+	tk := task.Task{
+		ID:        "abcdef1234567890",
+		Title:     "Tagged task",
+		CreatedAt: now,
+		Tags:      []string{"work", "urgent"},
+	}
+
+	output := renderTask(tk, 0, 1) // not selected
+	if !strings.Contains(output, "[work]") {
+		t.Errorf("expected output to contain '[work]', got:\n%s", output)
+	}
+	if !strings.Contains(output, "[urgent]") {
+		t.Errorf("expected output to contain '[urgent]', got:\n%s", output)
+	}
+}
+
+func TestRenderTask_WithoutTags(t *testing.T) {
+	now := time.Now()
+	tk := task.Task{
+		ID:        "abcdef1234567890",
+		Title:     "Plain task",
+		CreatedAt: now,
+		Tags:      []string{},
+	}
+
+	output := renderTask(tk, 0, 1)
+	if strings.Contains(output, "[") && strings.Contains(output, "]") {
+		// The ID is in brackets-ish format but shouldn't have tag brackets
+		// Just ensure no tag-formatted brackets appear after the title
+		if strings.Contains(output, "[]") {
+			t.Errorf("empty tags should not render brackets, got:\n%s", output)
+		}
+	}
+}
+
 func TestDayView_EmptyState(t *testing.T) {
 	m := testDayModel(t)
 

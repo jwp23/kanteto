@@ -88,6 +88,14 @@ func renderTask(t task.Task, idx, cursor int) string {
 		line = fmt.Sprintf("%s%s  %s", prefix, dimStyle.Render(id), style.Render(t.Title))
 	}
 
+	if len(t.Tags) > 0 {
+		var tags string
+		for _, tag := range t.Tags {
+			tags += " " + dimStyle.Render("["+tag+"]")
+		}
+		line += tags
+	}
+
 	if idx == cursor {
 		return selectedStyle.Render(line)
 	}

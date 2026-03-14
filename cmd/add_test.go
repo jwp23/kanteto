@@ -15,6 +15,7 @@ func execAdd(t *testing.T, testSvc *task.Service, args ...string) (string, error
 	// Reset flags
 	addBy = ""
 	addEvery = ""
+	addTags = nil
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
@@ -89,5 +90,29 @@ func TestAdd_MissingTitle(t *testing.T) {
 	_, err := execAdd(t, testSvc)
 	if err == nil {
 		t.Error("expected error when no title is provided")
+	}
+}
+
+func TestAdd_WithTags(t *testing.T) {
+	testSvc := setupTestService(t)
+
+	out, err := execAdd(t, testSvc, "Tagged task", "--tag", "work", "--tag", "urgent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Added: Tagged task") {
+		t.Errorf("expected output to contain 'Added: Tagged task', got:\n%s", out)
+	}
+	if !strings.Contains(out, "[work") {
+		t.Errorf("expected output to contain tags, got:\n%s", out)
+	}
+
+	// Verify tags are stored
+	tasks, _ := testSvc.ListAll()
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if len(tasks[0].Tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(tasks[0].Tags))
 	}
 }

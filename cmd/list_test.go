@@ -25,6 +25,7 @@ func execList(t *testing.T, testSvc *task.Service, args ...string) (string, erro
 	// Reset flags between test runs
 	listNext = false
 	listPrev = false
+	listTag = ""
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 	rootCmd.SetErr(buf)
@@ -99,6 +100,26 @@ func TestListDefaultShowsToday(t *testing.T) {
 	}
 	if !strings.Contains(out, "Today task") {
 		t.Errorf("default list should show today's tasks, got:\n%s", out)
+	}
+}
+
+func TestListFilterByTag(t *testing.T) {
+	testSvc := setupTestService(t)
+
+	now := time.Now()
+	todayLater := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 0, 0, now.Location())
+	testSvc.Add("Work task", &todayLater, "work")
+	testSvc.Add("Personal task", &todayLater, "personal")
+
+	out, err := execList(t, testSvc, "--tag", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Work task") {
+		t.Errorf("--tag work should show work tasks, got:\n%s", out)
+	}
+	if strings.Contains(out, "Personal task") {
+		t.Errorf("--tag work should NOT show personal tasks, got:\n%s", out)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 var (
 	listNext bool
 	listPrev bool
+	listTag  string
 )
 
 var listCmd = &cobra.Command{
@@ -60,6 +61,13 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
+		if listTag != "" {
+			overdue = filterByTag(overdue, listTag)
+			today = filterByTag(today, listTag)
+			upcoming = filterByTag(upcoming, listTag)
+			undated = filterByTag(undated, listTag)
+		}
+
 		if len(overdue) == 0 && len(today) == 0 && len(upcoming) == 0 && len(undated) == 0 {
 			fmt.Fprintln(w, "No tasks. Add one with: kt add \"your task\"")
 			return nil
@@ -103,8 +111,22 @@ func fprintTasks(w io.Writer, tasks []task.Task) {
 	}
 }
 
+func filterByTag(tasks []task.Task, tag string) []task.Task {
+	var filtered []task.Task
+	for _, t := range tasks {
+		for _, tg := range t.Tags {
+			if tg == tag {
+				filtered = append(filtered, t)
+				break
+			}
+		}
+	}
+	return filtered
+}
+
 func init() {
 	listCmd.Flags().BoolVar(&listNext, "next", false, "Show next day's tasks")
 	listCmd.Flags().BoolVar(&listPrev, "prev", false, "Show previous day's tasks")
+	listCmd.Flags().StringVar(&listTag, "tag", "", "Filter tasks by tag")
 	rootCmd.AddCommand(listCmd)
 }

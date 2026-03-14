@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jwp23/kanteto/internal/nlp"
@@ -10,8 +11,9 @@ import (
 )
 
 var (
-	addBy    string
+	addBy   string
 	addEvery string
+	addTags []string
 )
 
 var addCmd = &cobra.Command{
@@ -40,16 +42,20 @@ var addCmd = &cobra.Command{
 			dueAt = &t
 		}
 
-		tk, err := svc.Add(title, dueAt)
+		tk, err := svc.Add(title, dueAt, addTags...)
 		if err != nil {
 			return err
 		}
 
 		if tk.DueAt != nil {
-			fmt.Printf("Added: %s (due %s) [%s]\n", tk.Title, tk.DueAt.Format("Mon Jan 2 3:04PM"), tk.ID[:8])
+			fmt.Printf("Added: %s (due %s) [%s]", tk.Title, tk.DueAt.Format("Mon Jan 2 3:04PM"), tk.ID[:8])
 		} else {
-			fmt.Printf("Added: %s [%s]\n", tk.Title, tk.ID[:8])
+			fmt.Printf("Added: %s [%s]", tk.Title, tk.ID[:8])
 		}
+		if len(tk.Tags) > 0 {
+			fmt.Printf(" %s", formatTags(tk.Tags))
+		}
+		fmt.Println()
 		return nil
 	},
 }
@@ -71,8 +77,17 @@ func addRecurring(title, every string) error {
 	return nil
 }
 
+func formatTags(tags []string) string {
+	parts := make([]string, len(tags))
+	for i, t := range tags {
+		parts[i] = "[" + t + "]"
+	}
+	return strings.Join(parts, " ")
+}
+
 func init() {
 	addCmd.Flags().StringVar(&addBy, "by", "", "deadline in natural language (e.g. \"march 11\", \"tomorrow at 3pm\")")
 	addCmd.Flags().StringVar(&addEvery, "every", "", "recurrence pattern (e.g. \"weekdays at 4pm\", \"friday at 5pm\")")
+	addCmd.Flags().StringArrayVar(&addTags, "tag", nil, "tag for the task (can be repeated)")
 	rootCmd.AddCommand(addCmd)
 }
