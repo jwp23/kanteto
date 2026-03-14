@@ -10,11 +10,13 @@ import (
 // Config holds application configuration.
 type Config struct {
 	ActiveProfile string `toml:"-"`
+	SoundFile     string `toml:"-"`
 }
 
 // tomlConfig is the on-disk representation.
 type tomlConfig struct {
 	ActiveProfile string `toml:"active_profile"`
+	SoundFile     string `toml:"sound_file"`
 }
 
 // Load reads config from XDG_CONFIG_HOME/kanteto/config.toml.
@@ -41,6 +43,7 @@ func Load() (Config, error) {
 	if tc.ActiveProfile != "" {
 		cfg.ActiveProfile = tc.ActiveProfile
 	}
+	cfg.SoundFile = tc.SoundFile
 
 	return cfg, nil
 }

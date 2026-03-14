@@ -14,11 +14,12 @@ func testDayModel(t *testing.T) model {
 	now := time.Now()
 	viewDate := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.Local)
 	m := model{
-		svc:      svc,
-		viewMode: dayView,
-		viewDate: viewDate,
-		width:    80,
-		height:   24,
+		svc:        svc,
+		viewMode:   dayView,
+		viewDate:   viewDate,
+		width:      80,
+		height:     24,
+		alertedIDs: make(map[string]bool),
 	}
 	m.refreshData()
 	return m
