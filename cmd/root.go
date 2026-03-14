@@ -7,6 +7,7 @@ import (
 
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
+	"github.com/jwp23/kanteto/internal/sync"
 	"github.com/jwp23/kanteto/internal/task"
 	"github.com/jwp23/kanteto/internal/tui"
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 
 var (
 	svc             *task.Service
+	syncer          *sync.Sync
 	cfg             config.Config
 	profileOverride string
 )
@@ -27,7 +29,7 @@ var rootCmd = &cobra.Command{
 		return initService()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := tui.New(svc, activeProfile())
+		p := tui.New(svc, activeProfile(), syncer)
 		_, err := p.Run()
 		return err
 	},
@@ -69,6 +71,7 @@ func initService() error {
 	}
 
 	svc = task.NewService(repo)
+	syncer = sync.New(doltDir)
 	return nil
 }
 

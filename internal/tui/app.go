@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,6 +9,13 @@ import (
 	"github.com/jwp23/kanteto/internal/nlp"
 	"github.com/jwp23/kanteto/internal/task"
 )
+
+// Syncer provides sync operations for the TUI.
+type Syncer interface {
+	Push() error
+	Pull() error
+	HasRemote(name string) bool
+}
 
 type viewMode int
 
@@ -74,6 +82,10 @@ type model struct {
 	// Midnight detection
 	lastDate int // YearDay of the last known date
 
+	// Sync
+	syncer     Syncer
+	syncStatus string
+
 	// Help overlay
 	showHelp bool
 
@@ -86,9 +98,14 @@ type model struct {
 
 type refreshMsg struct{}
 type tickMsg time.Time
+type syncResultMsg struct {
+	op  string
+	err error
+}
+type clearSyncMsg struct{}
 
 // New creates and returns the Bubble Tea program.
-func New(svc *task.Service, profile string) *tea.Program {
+func New(svc *task.Service, profile string, syncer Syncer) *tea.Program {
 	now := time.Now()
 	m := model{
 		svc:      svc,
@@ -96,6 +113,7 @@ func New(svc *task.Service, profile string) *tea.Program {
 		viewDate: now,
 		lastDate: now.YearDay(),
 		profile:  profile,
+		syncer:   syncer,
 	}
 	return tea.NewProgram(m, tea.WithAltScreen())
 }
@@ -137,6 +155,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshData()
 		}
 		return m, tickEvery(time.Minute)
+
+	case syncResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.syncStatus = ""
+		} else {
+			switch msg.op {
+			case "push":
+				m.syncStatus = "Push complete"
+			case "pull":
+				m.syncStatus = "Pull complete"
+				m.refreshData()
+			}
+		}
+		return m, clearSyncStatusAfter(3 * time.Second)
+
+	case clearSyncMsg:
+		m.syncStatus = ""
+		return m, nil
 
 	case tea.KeyMsg:
 		if m.showHelp {
@@ -414,12 +451,58 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.reparseResult = fmt.Sprintf("Found %d/%d tasks with deadlines. Press y to reparse, esc to cancel", count, len(undated))
 		return m, nil
 
+	case "P":
+		if m.syncer == nil {
+			m.err = errors.New("sync not available")
+			return m, nil
+		}
+		if !m.syncer.HasRemote("origin") {
+			m.err = errors.New("no remote configured")
+			return m, nil
+		}
+		m.syncStatus = "Pushing..."
+		return m, m.doPush()
+
+	case "p":
+		if m.syncer == nil {
+			m.err = errors.New("sync not available")
+			return m, nil
+		}
+		if !m.syncer.HasRemote("origin") {
+			m.err = errors.New("no remote configured")
+			return m, nil
+		}
+		m.syncStatus = "Pulling..."
+		return m, m.doPull()
+
 	case "?":
 		m.showHelp = true
 		return m, nil
 	}
 
 	return m, nil
+}
+
+func (m model) doPush() tea.Cmd {
+	syncer := m.syncer
+	return func() tea.Msg {
+		err := syncer.Push()
+		return syncResultMsg{op: "push", err: err}
+	}
+}
+
+func (m model) doPull() tea.Cmd {
+	syncer := m.syncer
+	return func() tea.Msg {
+		err := syncer.Pull()
+		return syncResultMsg{op: "pull", err: err}
+	}
+}
+
+func clearSyncStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return clearSyncMsg{}
+	})
 }
 
 func (m model) timeNav(dir int) model {
@@ -724,6 +807,10 @@ func renderFooter(m model) string {
 		return fmt.Sprintf("  %s", m.reparseResult)
 	}
 
+	if m.syncStatus != "" {
+		return fmt.Sprintf("  %s", m.syncStatus)
+	}
+
 	viewIndicator := "[d]ay [w]eek [m]onth"
 	switch m.viewMode {
 	case dayView:
@@ -734,7 +821,7 @@ func renderFooter(m model) string {
 		viewIndicator = "[d]ay [w]eek [M]onth"
 	}
 
-	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  t:tag  T:untag  h/l:nav  .:today  ?:help  q:quit"
+	keys := "j/k:move  space:done  a:add  e:edit  s:snooze  x:delete  t:tag  T:untag  p:pull  P:push  h/l:nav  .:today  ?:help  q:quit"
 	if m.viewMode == weekView {
 		keys = "j/k:day  ←/→:day  enter:open  h/l:week  a:add  .:today  ?:help  q:quit"
 	}
@@ -769,6 +856,8 @@ func renderHelp(m model) string {
     t           Add tag
     T           Remove tag
     R           Reparse undated tasks
+    p           Pull from remote
+    P           Push to remote
     x / delete  Delete task
     ?           Toggle help
     q           Quit
