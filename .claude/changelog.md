@@ -46,6 +46,8 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-14
+
 ### Added
 
 - TUI due-date alert: audible notification when a task's deadline passes while TUI is open. Tries `paplay`/`afplay`/`aplay` with configurable `sound_file`, falls back to terminal bell. One alert per tick, `alertedIDs` prevents re-firing (`kanteto-e0t`, `kanteto-5vl`, `kanteto-o6w`).
