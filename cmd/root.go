@@ -29,7 +29,8 @@ var rootCmd = &cobra.Command{
 		return initService()
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := tui.New(svc, activeProfile(), syncer)
+		player := tui.NewSoundPlayer(cfg.SoundFile)
+		p := tui.New(svc, activeProfile(), syncer, player)
 		_, err := p.Run()
 		return err
 	},

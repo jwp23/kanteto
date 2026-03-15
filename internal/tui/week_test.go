@@ -20,6 +20,7 @@ func testWeekModel(t *testing.T) model {
 		weekCursorDay: 3, // Wednesday by default for most tests
 		width:         120,
 		height:        24,
+		alertedIDs:    make(map[string]bool),
 	}
 }
 
@@ -64,9 +65,10 @@ func TestWeekCursor_InitializesToCurrentDay(t *testing.T) {
 	svc := testService(t)
 	// March 18, 2026 is a Wednesday (weekday 3)
 	m := model{
-		svc:      svc,
-		viewMode: dayView,
-		viewDate: time.Date(2026, time.March, 18, 0, 0, 0, 0, time.Local),
+		svc:        svc,
+		viewMode:   dayView,
+		viewDate:   time.Date(2026, time.March, 18, 0, 0, 0, 0, time.Local),
+		alertedIDs: make(map[string]bool),
 	}
 
 	updated := sendKey(m, "w")

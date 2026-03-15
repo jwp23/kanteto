@@ -82,6 +82,10 @@ type model struct {
 	// Midnight detection
 	lastDate int // YearDay of the last known date
 
+	// Alert
+	alertedIDs  map[string]bool
+	alertPlayer AlertPlayer
+
 	// Sync
 	syncer     Syncer
 	syncStatus string
@@ -105,15 +109,17 @@ type syncResultMsg struct {
 type clearSyncMsg struct{}
 
 // New creates and returns the Bubble Tea program.
-func New(svc *task.Service, profile string, syncer Syncer) *tea.Program {
+func New(svc *task.Service, profile string, syncer Syncer, alertPlayer AlertPlayer) *tea.Program {
 	now := time.Now()
 	m := model{
-		svc:      svc,
-		viewMode: dayView,
-		viewDate: now,
-		lastDate: now.YearDay(),
-		profile:  profile,
-		syncer:   syncer,
+		svc:         svc,
+		viewMode:    dayView,
+		viewDate:    now,
+		lastDate:    now.YearDay(),
+		profile:     profile,
+		syncer:      syncer,
+		alertedIDs:  make(map[string]bool),
+		alertPlayer: alertPlayer,
 	}
 	return tea.NewProgram(m, tea.WithAltScreen())
 }
@@ -152,9 +158,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if oldToday.Equal(yesterday) {
 				m.viewDate = now
 			}
-			m.refreshData()
+		}
+		m.refreshData()
+
+		// Check for newly-due tasks
+		newlyDue := newlyDueTasks(m.allTasks, time.Now(), m.alertedIDs)
+		for _, id := range newlyDue {
+			m.alertedIDs[id] = true
+		}
+		if len(newlyDue) > 0 && m.alertPlayer != nil {
+			return m, tea.Batch(playAlert(m.alertPlayer), tickEvery(time.Minute))
 		}
 		return m, tickEvery(time.Minute)
+
+	case alertPlayedMsg:
+		return m, nil
 
 	case syncResultMsg:
 		if msg.err != nil {

@@ -50,15 +50,17 @@ func testModel(t *testing.T) model {
 		monthTasks:     make(map[int][]task.Task),
 		width:          80,
 		height:         24,
+		alertedIDs:     make(map[string]bool),
 	}
 }
 
 func TestMonthCursor_InitializesToCurrentDay(t *testing.T) {
 	svc := testService(t)
 	m := model{
-		svc:      svc,
-		viewMode: dayView,
-		viewDate: time.Date(2026, time.March, 15, 0, 0, 0, 0, time.Local),
+		svc:        svc,
+		viewMode:   dayView,
+		viewDate:   time.Date(2026, time.March, 15, 0, 0, 0, 0, time.Local),
+		alertedIDs: make(map[string]bool),
 	}
 
 	// Switch to month view

@@ -24,12 +24,13 @@ func testDayModelWithSyncer(t *testing.T, syncer Syncer) model {
 	now := time.Now()
 	viewDate := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.Local)
 	m := model{
-		svc:      svc,
-		viewMode: dayView,
-		viewDate: viewDate,
-		width:    80,
-		height:   24,
-		syncer:   syncer,
+		svc:        svc,
+		viewMode:   dayView,
+		viewDate:   viewDate,
+		width:      80,
+		height:     24,
+		syncer:     syncer,
+		alertedIDs: make(map[string]bool),
 	}
 	m.refreshData()
 	return m
