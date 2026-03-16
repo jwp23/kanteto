@@ -46,6 +46,24 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-03-16
+
+### Fixed
+
+- `kt migrate` no longer fails with "Dolt repo already exists" when `PersistentPreRunE` pre-initializes the Dolt directory. Migrate command now overrides `PersistentPreRunE` with a no-op.
+- `kt migrate` handles older SQLite schemas missing `tags`, `profile`, or `recurrence_*` columns — introspects schema via `PRAGMA table_info` and substitutes defaults.
+- `store.New()` now calls `ensureSchema()` unconditionally, so a user-initiated `dolt init` still gets the `tasks` table created.
+
+### Changed
+
+- `kt migrate` replaces `.dolt` directory guard with data-level check: errors if tasks already exist in Dolt unless `--force` flag is passed.
+- README sync instructions corrected: data directory is `~/.local/share/kanteto/dolt/` (not `~/.local/share/kanteto/`). Added GitHub repo initialization step and second-machine clone instructions.
+
+### Added
+
+- `--force` flag on `kt migrate` to allow re-running migration when tasks already exist.
+- `TestMigrate_ExistingEmptyRepo` and `TestMigrate_OldSchema` test cases.
+
 ## [0.4.0] - 2026-03-14
 
 ### Added
