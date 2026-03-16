@@ -36,6 +36,10 @@ func New(dir string) (*Store, error) {
 		}
 	}
 
+	if err := s.ensureSchema(); err != nil {
+		return nil, fmt.Errorf("ensure schema: %w", err)
+	}
+
 	return s, nil
 }
 
@@ -44,6 +48,13 @@ func (s *Store) initRepo() error {
 		return err
 	}
 
+	if err := s.runDolt("add", "-A"); err != nil {
+		return err
+	}
+	return s.runDolt("commit", "-m", "init", "--allow-empty")
+}
+
+func (s *Store) ensureSchema() error {
 	schema := `CREATE TABLE IF NOT EXISTS tasks (
 		id                  VARCHAR(255) PRIMARY KEY,
 		title               VARCHAR(1024) NOT NULL,
@@ -56,14 +67,7 @@ func (s *Store) initRepo() error {
 		tags                JSON NOT NULL,
 		profile             VARCHAR(255) NOT NULL DEFAULT 'default'
 	);`
-	if err := s.execSQL(schema); err != nil {
-		return fmt.Errorf("create table: %w", err)
-	}
-
-	if err := s.runDolt("add", "-A"); err != nil {
-		return err
-	}
-	return s.runDolt("commit", "-m", "init", "--allow-empty")
+	return s.execSQL(schema)
 }
 
 // Close is a no-op for the CLI store.

@@ -78,11 +78,12 @@ One-time migration from an existing SQLite database to Dolt.
 
 ```sh
 kt migrate               # reads kanteto.db, writes to dolt/
+kt migrate --force       # re-run even if tasks already exist in Dolt
 ```
 
 ## Syncing Across Machines
 
-Kanteto stores its data in a Dolt repository at `~/.local/share/kanteto/`.
+Kanteto stores its data in a Dolt repository at `~/.local/share/kanteto/dolt/`.
 To sync tasks across machines, use the `dolt` CLI directly in the data directory.
 
 Dolt supports several remote backends — you are not limited to DoltHub:
@@ -95,21 +96,45 @@ Dolt supports several remote backends — you are not limited to DoltHub:
 | AWS (S3 + DynamoDB) | `aws://[table:bucket]/db` |
 | GCS | `gs://bucket/path` |
 
-### Initial remote setup
+### Initial remote setup (GitHub example)
 
-First, create the remote repository on your hosting service (e.g., create a
-repo on GitHub or DoltHub). Then add it as a remote:
+1. Create a **new repository** on GitHub (e.g. `kanteto-tasks`).
+
+2. GitHub repos need at least one commit before Dolt can push. Initialize it:
 
 ```sh
-cd ~/.local/share/kanteto
+cd /tmp
+git clone git@github.com:<user>/<repo>.git
+cd <repo>
+git commit --allow-empty -m "init"
+git push origin main
+cd - && rm -rf /tmp/<repo>
+```
+
+3. Add the remote and push from the Dolt data directory:
+
+```sh
+cd ~/.local/share/kanteto/dolt
 dolt remote add origin git@github.com:<user>/<repo>.git
 dolt push origin main
+```
+
+> **Note:** Dolt stores data in custom git refs that won't appear as normal
+> files in GitHub's UI. The repo will look mostly empty in the browser —
+> this is expected. Use `dolt clone` or `dolt pull` to retrieve the data on
+> another machine.
+
+3. On your **second machine**, after installing Kanteto and Dolt:
+
+```sh
+mkdir -p ~/.local/share/kanteto
+dolt clone git@github.com:<user>/<repo>.git ~/.local/share/kanteto/dolt
 ```
 
 ### Ongoing sync
 
 ```sh
-cd ~/.local/share/kanteto
+cd ~/.local/share/kanteto/dolt
 dolt push origin main        # push local changes to remote
 dolt pull origin              # pull remote changes
 ```
@@ -117,7 +142,7 @@ dolt pull origin              # pull remote changes
 ### Useful commands
 
 ```sh
-cd ~/.local/share/kanteto
+cd ~/.local/share/kanteto/dolt
 dolt remote -v               # list configured remotes
 dolt status                  # check for uncommitted changes
 dolt log                     # view commit history

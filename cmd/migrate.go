@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
@@ -16,10 +17,15 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+var migrateForce bool
+
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Migrate tasks from SQLite to Dolt",
 	Long:  "One-time migration: reads all tasks from the SQLite database and writes them to a new Dolt repository.",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return nil // migrate manages its own Dolt initialization
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dataDir := config.DataDir()
 		sqlitePath := filepath.Join(dataDir, "kanteto.db")
@@ -30,24 +36,28 @@ var migrateCmd = &cobra.Command{
 			return fmt.Errorf("no SQLite database found at %s", sqlitePath)
 		}
 
-		// Check Dolt repo doesn't already exist
-		if _, err := os.Stat(filepath.Join(doltDir, ".dolt")); err == nil {
-			return fmt.Errorf("Dolt repo already exists at %s — migration already done?", doltDir)
-		}
-
 		// Read all tasks from SQLite
 		tasks, err := readSQLiteTasks(sqlitePath)
 		if err != nil {
 			return fmt.Errorf("read SQLite: %w", err)
 		}
 
-		// Create Dolt repo
+		// Create Dolt repo (store.New handles init + schema idempotently)
 		if err := os.MkdirAll(doltDir, 0o755); err != nil {
 			return fmt.Errorf("create dolt dir: %w", err)
 		}
 		doltStore, err := store.New(doltDir)
 		if err != nil {
 			return fmt.Errorf("init dolt: %w", err)
+		}
+
+		// Check if tasks already exist in Dolt
+		existing, err := doltStore.ListAll(true)
+		if err != nil {
+			return fmt.Errorf("check existing tasks: %w", err)
+		}
+		if len(existing) > 0 && !migrateForce {
+			return fmt.Errorf("Dolt repo already contains %d tasks — use --force to re-migrate", len(existing))
 		}
 
 		// Write all tasks to Dolt
@@ -70,7 +80,31 @@ var migrateCmd = &cobra.Command{
 	},
 }
 
+// sqliteColumns returns the set of column names present in the tasks table.
+func sqliteColumns(db *sql.DB) (map[string]bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(tasks)`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cols := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		cols[name] = true
+	}
+	return cols, rows.Err()
+}
+
 // readSQLiteTasks opens a SQLite database directly and reads all tasks.
+// Handles older schemas that may lack tags, profile, or recurrence columns.
 func readSQLiteTasks(dsn string) ([]task.Task, error) {
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -78,9 +112,36 @@ func readSQLiteTasks(dsn string) ([]task.Task, error) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query(`SELECT id, title, due_at, completed, completed_at, created_at,
-		recurrence_pattern, recurrence_time,
-		tags, profile FROM tasks`)
+	cols, err := sqliteColumns(db)
+	if err != nil {
+		return nil, fmt.Errorf("read schema: %w", err)
+	}
+
+	// Build SELECT with defaults for missing columns
+	selects := []string{"id", "title", "due_at", "completed", "completed_at", "created_at"}
+	if cols["recurrence_pattern"] {
+		selects = append(selects, "recurrence_pattern")
+	} else {
+		selects = append(selects, "NULL AS recurrence_pattern")
+	}
+	if cols["recurrence_time"] {
+		selects = append(selects, "recurrence_time")
+	} else {
+		selects = append(selects, "NULL AS recurrence_time")
+	}
+	if cols["tags"] {
+		selects = append(selects, "tags")
+	} else {
+		selects = append(selects, "'[]' AS tags")
+	}
+	if cols["profile"] {
+		selects = append(selects, "profile")
+	} else {
+		selects = append(selects, "'default' AS profile")
+	}
+
+	q := "SELECT " + strings.Join(selects, ", ") + " FROM tasks"
+	rows, err := db.Query(q)
 	if err != nil {
 		return nil, err
 	}
@@ -137,5 +198,6 @@ func unmarshalTags(s string) []string {
 }
 
 func init() {
+	migrateCmd.Flags().BoolVar(&migrateForce, "force", false, "re-run migration even if tasks already exist in Dolt")
 	rootCmd.AddCommand(migrateCmd)
 }

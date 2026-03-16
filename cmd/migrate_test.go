@@ -109,7 +109,7 @@ func TestMigrate_HappyPath(t *testing.T) {
 	db.Close()
 
 	t.Setenv("XDG_DATA_HOME", parentDir)
-	out, err := execMigrate(t, parentDir)
+	out, err := execMigrate(t)
 	if err != nil {
 		t.Fatalf("migrate error: %v\noutput: %s", err, out)
 	}
@@ -161,7 +161,7 @@ func TestMigrate_NoSQLiteFile(t *testing.T) {
 	os.MkdirAll(dataDir, 0o755)
 
 	t.Setenv("XDG_DATA_HOME", parentDir)
-	_, err := execMigrate(t, parentDir)
+	_, err := execMigrate(t)
 	if err == nil {
 		t.Error("expected error when no SQLite file exists")
 	}
@@ -173,35 +173,126 @@ func TestMigrate_AlreadyMigrated(t *testing.T) {
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
 
-	// Create SQLite DB
+	// Create SQLite DB with a task
 	dbPath := filepath.Join(dataDir, "kanteto.db")
 	db := createSQLiteDB(t, dbPath)
+	now := time.Now().Truncate(time.Second)
+	insertSQLiteTask(t, db, task.Task{ID: task.NewID(), Title: "Original", CreatedAt: now, Tags: []string{}})
 	db.Close()
 
-	// Pre-create dolt dir
-	doltDir := filepath.Join(dataDir, "dolt")
-	os.MkdirAll(doltDir, 0o755)
-	cmd := exec.Command("dolt", "init")
-	cmd.Dir = doltDir
-	cmd.CombinedOutput()
-
+	// Run first migration
 	t.Setenv("XDG_DATA_HOME", parentDir)
-	_, err := execMigrate(t, parentDir)
+	out, err := execMigrate(t)
+	if err != nil {
+		t.Fatalf("first migrate error: %v\noutput: %s", err, out)
+	}
+
+	// Re-running without --force should fail
+	_, err = execMigrate(t)
 	if err == nil {
-		t.Error("expected error when Dolt repo already exists")
+		t.Error("expected error when tasks already exist in Dolt")
+	}
+	if err != nil && !strings.Contains(err.Error(), "--force") {
+		t.Errorf("expected error to mention --force, got: %v", err)
 	}
 }
 
-func execMigrate(t *testing.T, dataParentDir string) (string, error) {
+func TestMigrate_ExistingEmptyRepo(t *testing.T) {
+	skipIfNoDolt(t)
+	parentDir := t.TempDir()
+	dataDir := filepath.Join(parentDir, "kanteto")
+	os.MkdirAll(dataDir, 0o755)
+
+	// Create SQLite DB with a task
+	dbPath := filepath.Join(dataDir, "kanteto.db")
+	db := createSQLiteDB(t, dbPath)
+	now := time.Now().Truncate(time.Second)
+	insertSQLiteTask(t, db, task.Task{ID: task.NewID(), Title: "Migrate me", CreatedAt: now, Tags: []string{}})
+	db.Close()
+
+	// Pre-init dolt repo (simulates user running `dolt init` manually)
+	doltDir := filepath.Join(dataDir, "dolt")
+	os.MkdirAll(doltDir, 0o755)
+	initCmd := exec.Command("dolt", "init")
+	initCmd.Dir = doltDir
+	if out, err := initCmd.CombinedOutput(); err != nil {
+		t.Fatalf("dolt init: %s: %v", out, err)
+	}
+
+	// Migrate should succeed — store.New creates the tasks table idempotently
+	t.Setenv("XDG_DATA_HOME", parentDir)
+	out, err := execMigrate(t)
+	if err != nil {
+		t.Fatalf("migrate error: %v\noutput: %s", err, out)
+	}
+	if !strings.Contains(out, "Migrated 1 tasks") {
+		t.Errorf("expected 'Migrated 1 tasks', got:\n%s", out)
+	}
+}
+
+func TestMigrate_OldSchema(t *testing.T) {
+	skipIfNoDolt(t)
+	parentDir := t.TempDir()
+	dataDir := filepath.Join(parentDir, "kanteto")
+	os.MkdirAll(dataDir, 0o755)
+
+	// Create SQLite DB with old schema (no tags, profile, recurrence columns)
+	dbPath := filepath.Join(dataDir, "kanteto.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE tasks (
+			id TEXT PRIMARY KEY, title TEXT NOT NULL, due_at DATETIME,
+			completed INTEGER NOT NULL DEFAULT 0, completed_at DATETIME,
+			created_at DATETIME NOT NULL
+		);`)
+	if err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	now := time.Now().Truncate(time.Second)
+	_, err = db.Exec(`INSERT INTO tasks (id, title, completed, created_at) VALUES (?, ?, 0, ?)`,
+		"old-1", "Old task", now)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	db.Close()
+
+	t.Setenv("XDG_DATA_HOME", parentDir)
+	out, migErr := execMigrate(t)
+	if migErr != nil {
+		t.Fatalf("migrate error: %v\noutput: %s", migErr, out)
+	}
+	if !strings.Contains(out, "Migrated 1 tasks") {
+		t.Errorf("expected 'Migrated 1 tasks', got:\n%s", out)
+	}
+
+	// Verify defaults were applied
+	doltDir := filepath.Join(dataDir, "dolt")
+	ds, err := store.New(doltDir)
+	if err != nil {
+		t.Fatalf("open dolt: %v", err)
+	}
+	got, err := ds.Get("old-1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got.Tags) != 0 {
+		t.Errorf("expected empty tags, got %v", got.Tags)
+	}
+	if got.Profile != "default" {
+		t.Errorf("expected profile 'default', got %q", got.Profile)
+	}
+}
+
+func execMigrate(t *testing.T, extraArgs ...string) (string, error) {
 	t.Helper()
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"migrate"})
-	origPre := rootCmd.PersistentPreRunE
-	rootCmd.PersistentPreRunE = nil
-	defer func() { rootCmd.PersistentPreRunE = origPre }()
+	rootCmd.SetArgs(append([]string{"migrate"}, extraArgs...))
 
 	r, w, _ := os.Pipe()
 	origStdout := os.Stdout
