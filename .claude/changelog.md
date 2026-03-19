@@ -46,6 +46,12 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-19
+
+### Added
+
+- Auto-sync with debounced background push: TUI automatically commits and pushes to Dolt remote after mutations, with debounce to batch rapid changes. Includes 243 new sync tests.
+
 ## [0.4.1] - 2026-03-16
 
 ### Fixed

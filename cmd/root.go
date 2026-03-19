@@ -24,7 +24,7 @@ var rootCmd = &cobra.Command{
 	Use:     "kt",
 	Short:   "Kanteto — track small tasks and promises",
 	Long:    "A TUI tool for tracking small tasks and promises that are too small for tickets but still need to get done on time.",
-	Version: "0.4.1",
+	Version: "0.5.0",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return initService()
 	},
