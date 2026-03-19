@@ -151,3 +151,246 @@ func TestSyncClearStatus(t *testing.T) {
 func teaKey(key string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 }
+
+// --- Auto-sync tests ---
+
+func TestAutoSync_MutationIncrementsGen(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	now := time.Now()
+	due := now.Add(5 * time.Minute)
+	m.svc.Add("test task", &due)
+	m.refreshData()
+
+	got, cmd := m.Update(teaKey(" "))
+	gm := got.(model)
+	if gm.autoSyncGen != 1 {
+		t.Errorf("expected autoSyncGen=1, got %d", gm.autoSyncGen)
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for auto-sync tick")
+	}
+}
+
+func TestAutoSync_StaleTickIgnored(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 5
+
+	got, cmd := m.Update(autoSyncTickMsg{gen: 3})
+	gm := got.(model)
+	if gm.autoSyncBusy {
+		t.Error("stale tick should not start push")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd for stale tick")
+	}
+}
+
+func TestAutoSync_TickTriggersPush(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 1
+
+	got, cmd := m.Update(autoSyncTickMsg{gen: 1})
+	gm := got.(model)
+	if !gm.autoSyncBusy {
+		t.Error("matching tick should start push")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for push")
+	}
+}
+
+func TestAutoSync_DirtyRePush(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncBusy = true
+	m.autoSyncDirty = true
+
+	got, cmd := m.Update(autoSyncResultMsg{})
+	gm := got.(model)
+	if !gm.autoSyncBusy {
+		t.Error("expected re-push when dirty")
+	}
+	if gm.autoSyncDirty {
+		t.Error("dirty should be cleared before re-push")
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for re-push")
+	}
+}
+
+func TestAutoSync_QuitFlushes(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 1
+	m.autoSyncPushed = false
+
+	got, cmd := m.Update(teaKey("q"))
+	gm := got.(model)
+	if !gm.quitting {
+		t.Error("expected quitting=true for flush")
+	}
+	if gm.syncStatus != "Syncing..." {
+		t.Errorf("expected syncStatus 'Syncing...', got %q", gm.syncStatus)
+	}
+	if cmd == nil {
+		t.Error("expected non-nil cmd for flush push")
+	}
+}
+
+func TestAutoSync_QuitWaitsForInFlight(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 1
+	m.autoSyncBusy = true
+
+	got, cmd := m.Update(teaKey("q"))
+	gm := got.(model)
+	if !gm.quitting {
+		t.Error("expected quitting=true")
+	}
+	if cmd == nil {
+		t.Error("expected timeout cmd")
+	}
+	if !gm.autoSyncBusy {
+		t.Error("should not start new push since one is in flight")
+	}
+}
+
+func TestAutoSync_ForceQuit(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.quitting = true
+
+	_, cmd := m.Update(teaKey("q"))
+	if cmd == nil {
+		t.Error("expected tea.Quit cmd on force quit")
+	}
+}
+
+func TestAutoSync_QuitSkipsFlushWhenPushed(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 1
+	m.autoSyncPushed = true
+
+	got, cmd := m.Update(teaKey("q"))
+	gm := got.(model)
+	if gm.quitting {
+		t.Error("should not set quitting when already pushed")
+	}
+	if cmd == nil {
+		t.Error("expected tea.Quit cmd")
+	}
+}
+
+func TestAutoSync_ManualPCancelsAutoSync(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 5
+
+	got, _ := m.Update(teaKey("P"))
+	gm := got.(model)
+	if gm.autoSyncGen != 6 {
+		t.Errorf("expected autoSyncGen=6 after P, got %d", gm.autoSyncGen)
+	}
+}
+
+func TestAutoSync_NoRemoteNoPush(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: false}
+	m := testDayModelWithSyncer(t, syncer)
+	now := time.Now()
+	due := now.Add(5 * time.Minute)
+	m.svc.Add("test task", &due)
+	m.refreshData()
+
+	_, cmd := m.Update(teaKey(" "))
+	if cmd != nil {
+		t.Error("expected nil cmd when no remote configured")
+	}
+}
+
+func TestAutoSync_ErrorShowsStatus(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncBusy = true
+
+	got, cmd := m.Update(autoSyncResultMsg{err: errors.New("network error")})
+	gm := got.(model)
+	if gm.syncStatus != "Auto-sync failed" {
+		t.Errorf("expected 'Auto-sync failed', got %q", gm.syncStatus)
+	}
+	if gm.err != nil {
+		t.Error("auto-sync errors should not set m.err")
+	}
+	if cmd == nil {
+		t.Error("expected clear status cmd")
+	}
+}
+
+func TestAutoSync_PushedTickIgnored(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 1
+	m.autoSyncPushed = true
+
+	got, cmd := m.Update(autoSyncTickMsg{gen: 1})
+	gm := got.(model)
+	if gm.autoSyncBusy {
+		t.Error("should not start push when already pushed")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd when already pushed")
+	}
+}
+
+func TestAutoSync_TickSetsDirtyWhenBusy(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncGen = 1
+	m.autoSyncBusy = true
+
+	got, cmd := m.Update(autoSyncTickMsg{gen: 1})
+	gm := got.(model)
+	if !gm.autoSyncDirty {
+		t.Error("tick should set dirty when push is in flight")
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd when busy")
+	}
+}
+
+func TestAutoSync_ResultQuitsWhenQuitting(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncBusy = true
+	m.quitting = true
+
+	got, cmd := m.Update(autoSyncResultMsg{})
+	gm := got.(model)
+	if gm.autoSyncBusy {
+		t.Error("autoSyncBusy should be cleared")
+	}
+	if cmd == nil {
+		t.Error("expected tea.Quit cmd")
+	}
+}
+
+func TestAutoSync_MutationSetsDirtyWhenBusy(t *testing.T) {
+	syncer := &fakeSyncer{hasRemote: true}
+	m := testDayModelWithSyncer(t, syncer)
+	m.autoSyncBusy = true
+
+	now := time.Now()
+	due := now.Add(5 * time.Minute)
+	m.svc.Add("task1", &due)
+	m.refreshData()
+
+	got, _ := m.Update(teaKey(" "))
+	gm := got.(model)
+	if !gm.autoSyncDirty {
+		t.Error("mutation while push in flight should set dirty")
+	}
+}

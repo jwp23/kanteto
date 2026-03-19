@@ -90,6 +90,13 @@ type model struct {
 	syncer     Syncer
 	syncStatus string
 
+	// Auto-sync
+	autoSyncGen    int
+	autoSyncBusy   bool
+	autoSyncDirty  bool
+	autoSyncPushed bool
+	quitting       bool
+
 	// Help overlay
 	showHelp bool
 
@@ -107,6 +114,9 @@ type syncResultMsg struct {
 	err error
 }
 type clearSyncMsg struct{}
+type autoSyncTickMsg struct{ gen int }
+type autoSyncResultMsg struct{ err error }
+type autoSyncFlushQuitMsg struct{}
 
 // New creates and returns the Bubble Tea program.
 func New(svc *task.Service, profile string, syncer Syncer, alertPlayer AlertPlayer) *tea.Program {
@@ -192,6 +202,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearSyncMsg:
 		m.syncStatus = ""
 		return m, nil
+
+	case autoSyncTickMsg:
+		if msg.gen != m.autoSyncGen || m.autoSyncPushed {
+			return m, nil
+		}
+		if m.autoSyncBusy {
+			m.autoSyncDirty = true
+			return m, nil
+		}
+		if m.syncer == nil || !m.syncer.HasRemote("origin") {
+			return m, nil
+		}
+		m.autoSyncBusy = true
+		return m, m.doAutoSync()
+
+	case autoSyncResultMsg:
+		m.autoSyncBusy = false
+		if msg.err != nil {
+			if m.quitting {
+				return m, tea.Quit
+			}
+			m.syncStatus = "Auto-sync failed"
+			return m, clearSyncStatusAfter(5 * time.Second)
+		}
+		if m.autoSyncDirty {
+			m.autoSyncDirty = false
+			m.autoSyncBusy = true
+			return m, m.doAutoSync()
+		}
+		m.autoSyncPushed = true
+		if m.quitting {
+			return m, tea.Quit
+		}
+		return m, nil
+
+	case autoSyncFlushQuitMsg:
+		return m, tea.Quit
 
 	case tea.KeyMsg:
 		if m.showHelp {
@@ -309,6 +356,21 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.reparseResult = ""
 	switch msg.String() {
 	case "q", "ctrl+c":
+		if m.quitting {
+			return m, tea.Quit
+		}
+		if m.syncer != nil && m.syncer.HasRemote("origin") && m.autoSyncGen > 0 && !m.autoSyncPushed {
+			m.quitting = true
+			m.syncStatus = "Syncing..."
+			timeout := tea.Tick(10*time.Second, func(time.Time) tea.Msg {
+				return autoSyncFlushQuitMsg{}
+			})
+			if m.autoSyncBusy {
+				return m, timeout
+			}
+			m.autoSyncBusy = true
+			return m, tea.Batch(m.doAutoSync(), timeout)
+		}
 		return m, tea.Quit
 
 	case "j", "down":
@@ -340,8 +402,10 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			t := m.allTasks[m.cursor]
 			if err := m.svc.Complete(t.ID); err != nil {
 				m.err = err
+				m.refreshData()
+				return m, nil
 			}
-			m.refreshData()
+			return m, m.afterMutation()
 		}
 		return m, nil
 
@@ -350,8 +414,10 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			t := m.allTasks[m.cursor]
 			if err := m.svc.Delete(t.ID); err != nil {
 				m.err = err
+				m.refreshData()
+				return m, nil
 			}
-			m.refreshData()
+			return m, m.afterMutation()
 		}
 		return m, nil
 
@@ -478,6 +544,7 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = errors.New("no remote configured")
 			return m, nil
 		}
+		m.autoSyncGen++
 		m.syncStatus = "Pushing..."
 		return m, m.doPush()
 
@@ -521,6 +588,34 @@ func clearSyncStatusAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg {
 		return clearSyncMsg{}
 	})
+}
+
+func (m model) scheduleAutoSync() tea.Cmd {
+	if m.syncer == nil || !m.syncer.HasRemote("origin") {
+		return nil
+	}
+	gen := m.autoSyncGen
+	return tea.Tick(8*time.Second, func(time.Time) tea.Msg {
+		return autoSyncTickMsg{gen: gen}
+	})
+}
+
+func (m model) doAutoSync() tea.Cmd {
+	syncer := m.syncer
+	return func() tea.Msg {
+		err := syncer.Push()
+		return autoSyncResultMsg{err: err}
+	}
+}
+
+func (m *model) afterMutation() tea.Cmd {
+	m.refreshData()
+	m.autoSyncGen++
+	m.autoSyncPushed = false
+	if m.autoSyncBusy {
+		m.autoSyncDirty = true
+	}
+	return m.scheduleAutoSync()
 }
 
 func (m model) timeNav(dir int) model {
@@ -583,16 +678,19 @@ func daysInMonth(t time.Time) int {
 func (m model) handleAddInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
+		var cmd tea.Cmd
 		if m.addInput != "" {
 			title, dueAt := nlp.ExtractDeadline(m.addInput)
 			if _, err := m.svc.Add(title, dueAt); err != nil {
 				m.err = err
+				m.refreshData()
+			} else {
+				cmd = m.afterMutation()
 			}
-			m.refreshData()
 		}
 		m.adding = false
 		m.addInput = ""
-		return m, nil
+		return m, cmd
 
 	case "esc":
 		m.adding = false
@@ -616,21 +714,25 @@ func (m model) handleAddInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleSnoozeInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
+		var cmd tea.Cmd
 		if m.snoozeInput != "" {
 			d, err := nlp.ParseDuration(m.snoozeInput)
 			if err != nil {
 				m.err = err
+				m.refreshData()
 			} else {
 				t := m.allTasks[m.cursor]
 				if err := m.svc.Snooze(t.ID, d); err != nil {
 					m.err = err
+					m.refreshData()
+				} else {
+					cmd = m.afterMutation()
 				}
 			}
-			m.refreshData()
 		}
 		m.snoozing = false
 		m.snoozeInput = ""
-		return m, nil
+		return m, cmd
 
 	case "esc":
 		m.snoozing = false
@@ -657,12 +759,13 @@ func (m model) handleReparseConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		result, err := m.svc.Reparse()
 		if err != nil {
 			m.err = err
-		} else {
-			m.reparseResult = fmt.Sprintf("Reparsed: %d/%d tasks updated", result.Updated, result.Total)
+			m.reparseConfirm = false
+			m.refreshData()
+			return m, nil
 		}
+		m.reparseResult = fmt.Sprintf("Reparsed: %d/%d tasks updated", result.Updated, result.Total)
 		m.reparseConfirm = false
-		m.refreshData()
-		return m, nil
+		return m, m.afterMutation()
 
 	case "esc", "n":
 		m.reparseConfirm = false
@@ -676,16 +779,19 @@ func (m model) handleReparseConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
+		var cmd tea.Cmd
 		if m.tagInput != "" {
 			t := m.allTasks[m.cursor]
 			if err := m.svc.AddTag(t.ID, m.tagInput); err != nil {
 				m.err = err
+				m.refreshData()
+			} else {
+				cmd = m.afterMutation()
 			}
-			m.refreshData()
 		}
 		m.tagging = false
 		m.tagInput = ""
-		return m, nil
+		return m, cmd
 
 	case "esc":
 		m.tagging = false
@@ -709,16 +815,19 @@ func (m model) handleTagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleUntagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
+		var cmd tea.Cmd
 		if m.untagInput != "" {
 			t := m.allTasks[m.cursor]
 			if err := m.svc.RemoveTag(t.ID, m.untagInput); err != nil {
 				m.err = err
+				m.refreshData()
+			} else {
+				cmd = m.afterMutation()
 			}
-			m.refreshData()
 		}
 		m.untagging = false
 		m.untagInput = ""
-		return m, nil
+		return m, cmd
 
 	case "esc":
 		m.untagging = false
@@ -742,21 +851,25 @@ func (m model) handleUntagInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) handleEditInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
+		var cmd tea.Cmd
 		if m.editInput != "" {
 			t, err := nlp.ParseDate(m.editInput)
 			if err != nil {
 				m.err = err
+				m.refreshData()
 			} else {
 				tk := m.allTasks[m.cursor]
 				if err := m.svc.SetDueAt(tk.ID, t); err != nil {
 					m.err = err
+					m.refreshData()
+				} else {
+					cmd = m.afterMutation()
 				}
 			}
-			m.refreshData()
 		}
 		m.editing = false
 		m.editInput = ""
-		return m, nil
+		return m, cmd
 
 	case "esc":
 		m.editing = false
