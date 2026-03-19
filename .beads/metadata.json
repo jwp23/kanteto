@@ -2,5 +2,6 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
-  "dolt_database": "kanteto"
+  "dolt_database": "kanteto",
+  "project_id": "f835aa42-a789-4948-8cc0-f339f76ee9d3"
 }
