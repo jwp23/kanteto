@@ -12,23 +12,49 @@ for tickets but still need to get done on time.
 
 ## Prerequisites
 
-- **Go** 1.25+ (for building)
-- **Dolt** v1.81.10+ — install from https://docs.dolthub.com/introduction/installation
-- **git** (required by Dolt for remote sync)
+- **Go** 1.25+
+- **C compiler** (cgo is required by the embedded Dolt engine)
+- **ICU libraries** (required by the Dolt regex engine)
+
+### macOS
+
+```sh
+brew install icu4c
+```
+
+Homebrew installs ICU as a keg-only formula. Set these before building:
+
+```sh
+export CGO_CPPFLAGS="-I$(brew --prefix icu4c)/include"
+export CGO_LDFLAGS="-L$(brew --prefix icu4c)/lib"
+```
+
+### Linux (Debian / Ubuntu)
+
+```sh
+sudo apt-get install libicu-dev
+```
+
+No extra flags needed — `pkg-config` finds ICU automatically.
+
+### Linux (Fedora / RHEL)
+
+```sh
+sudo dnf install libicu-devel
+```
 
 ## Install
 
-```sh
-go install github.com/jwp23/kanteto/cmd/kt@latest
-```
-
-Or build from source:
+Build from source:
 
 ```sh
 git clone https://github.com/jwp23/kanteto.git
 cd kanteto
 go build -o kt ./cmd/kt
 ```
+
+> **Note:** `go install` requires the CGO flags above to be set in your
+> environment since the embedded Dolt engine uses cgo.
 
 ## Quick Start
 
@@ -83,10 +109,26 @@ kt migrate --force       # re-run even if tasks already exist in Dolt
 
 ## Syncing Across Machines
 
-Kanteto stores its data in a Dolt repository at `~/.local/share/kanteto/dolt/`.
-To sync tasks across machines, use the `dolt` CLI directly in the data directory.
+Kanteto uses an embedded Dolt engine — no separate Dolt server or CLI is
+required at runtime. Task data lives at `~/.local/share/kanteto/`.
 
-Dolt supports several remote backends — you are not limited to DoltHub:
+Every mutation (add, complete, delete, edit) is automatically committed
+in-process. If a remote is configured, changes are pushed in the background.
+
+Use `P` (push) and `p` (pull) in the TUI for manual sync.
+
+### Remote setup
+
+Remote configuration requires the `dolt` CLI as a one-time setup step.
+Install it from https://docs.dolthub.com/introduction/installation, then:
+
+```sh
+cd ~/.local/share/kanteto/kanteto   # Dolt data directory
+dolt remote add origin <url>
+dolt push origin main
+```
+
+Dolt supports several remote backends:
 
 | Remote type | URL format |
 |-------------|------------|
@@ -96,57 +138,22 @@ Dolt supports several remote backends — you are not limited to DoltHub:
 | AWS (S3 + DynamoDB) | `aws://[table:bucket]/db` |
 | GCS | `gs://bucket/path` |
 
-### Initial remote setup (GitHub example)
+> **Note:** When using a Git remote (GitHub, GitLab), the repo needs at
+> least one commit before Dolt can push. Create the repo, push an empty
+> commit (`git commit --allow-empty -m "init" && git push`), then add it
+> as a Dolt remote.
 
-1. Create a **new repository** on GitHub (e.g. `kanteto-tasks`).
+### Second machine
 
-2. GitHub repos need at least one commit before Dolt can push. Initialize it:
-
-```sh
-cd /tmp
-git clone git@github.com:<user>/<repo>.git
-cd <repo>
-git commit --allow-empty -m "init"
-git push origin main
-cd - && rm -rf /tmp/<repo>
-```
-
-3. Add the remote and push from the Dolt data directory:
-
-```sh
-cd ~/.local/share/kanteto/dolt
-dolt remote add origin git@github.com:<user>/<repo>.git
-dolt push origin main
-```
-
-> **Note:** Dolt stores data in custom git refs that won't appear as normal
-> files in GitHub's UI. The repo will look mostly empty in the browser —
-> this is expected. Use `dolt clone` or `dolt pull` to retrieve the data on
-> another machine.
-
-3. On your **second machine**, after installing Kanteto and Dolt:
+On another machine, after building `kt`, clone the remote into the data
+directory:
 
 ```sh
 mkdir -p ~/.local/share/kanteto
-dolt clone git@github.com:<user>/<repo>.git ~/.local/share/kanteto/dolt
+dolt clone <url> ~/.local/share/kanteto/kanteto
 ```
 
-### Ongoing sync
-
-```sh
-cd ~/.local/share/kanteto/dolt
-dolt push origin main        # push local changes to remote
-dolt pull origin              # pull remote changes
-```
-
-### Useful commands
-
-```sh
-cd ~/.local/share/kanteto/dolt
-dolt remote -v               # list configured remotes
-dolt status                  # check for uncommitted changes
-dolt log                     # view commit history
-```
+After this one-time setup, `kt` handles all sync automatically.
 
 ## Configuration
 
@@ -156,7 +163,7 @@ Kanteto uses an optional TOML config file at `~/.config/kanteto/config.toml`:
 active_profile = "default"   # current profile
 ```
 
-Data is stored in a Dolt database at `~/.local/share/kanteto/`.
+Data is stored in an embedded Dolt database at `~/.local/share/kanteto/kanteto/`.
 Both paths follow the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec.
 
 ## License
