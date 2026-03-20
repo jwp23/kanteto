@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
@@ -56,20 +57,29 @@ func openDoltDB(dataDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 
-	dsn := fmt.Sprintf("file://%s?commitname=kanteto&commitemail=kanteto@local&database=kanteto", dataDir)
+	dsn := fmt.Sprintf("file://%s?commitname=kanteto&commitemail=kanteto@local&database=dolt", dataDir)
 	db, err := sql.Open("dolt", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open dolt: %w", err)
 	}
 
 	// Ensure the database exists (first-run scenario).
-	if _, err := db.Exec("CREATE DATABASE IF NOT EXISTS kanteto"); err != nil {
+	if _, err := db.Exec("CREATE DATABASE IF NOT EXISTS dolt"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("create database: %w", err)
 	}
-	if _, err := db.Exec("USE kanteto"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("use database: %w", err)
+	if _, err := db.Exec("USE dolt"); err != nil {
+		// Directory may exist but not be a valid Dolt DB — remove and recreate.
+		doltDir := filepath.Join(dataDir, "dolt")
+		os.RemoveAll(doltDir)
+		if _, err := db.Exec("CREATE DATABASE dolt"); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("create database: %w", err)
+		}
+		if _, err := db.Exec("USE dolt"); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("use database: %w", err)
+		}
 	}
 	return db, nil
 }

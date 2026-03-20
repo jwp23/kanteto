@@ -98,7 +98,7 @@ Remote configuration requires the `dolt` CLI as a one-time setup step.
 Install it from https://docs.dolthub.com/introduction/installation, then:
 
 ```sh
-cd ~/.local/share/kanteto/kanteto   # Dolt data directory
+cd ~/.local/share/kanteto/dolt   # Dolt data directory
 dolt remote add origin <url>
 dolt push origin main
 ```
@@ -125,7 +125,7 @@ directory:
 
 ```sh
 mkdir -p ~/.local/share/kanteto
-dolt clone <url> ~/.local/share/kanteto/kanteto
+dolt clone <url> ~/.local/share/kanteto/dolt
 ```
 
 After this one-time setup, `kt` handles all sync automatically.
@@ -138,7 +138,7 @@ Kanteto uses an optional TOML config file at `~/.config/kanteto/config.toml`:
 active_profile = "default"   # current profile
 ```
 
-Data is stored in an embedded Dolt database at `~/.local/share/kanteto/kanteto/`.
+Data is stored in an embedded Dolt database at `~/.local/share/kanteto/dolt/`.
 Both paths follow the [XDG Base Directory](https://specifications.freedesktop.org/basedir-spec/latest/) spec.
 
 ## License
