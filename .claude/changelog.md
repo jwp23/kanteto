@@ -46,6 +46,38 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-20
+
+### Changed
+
+- **Breaking:** Replaced Dolt CLI shell-outs with embedded Dolt SDK (`github.com/dolthub/driver`). The `dolt` CLI is no longer a runtime dependency. All SQL operations run in-process via `database/sql`.
+- Replaced debounced auto-sync with per-mutation commit + async push. Every mutation (add, complete, delete, edit) is committed synchronously in-process; push to remote fires asynchronously in the background.
+- `store.New()` now accepts `*sql.DB` instead of a directory path.
+- `sync.New()` now accepts `*sql.DB` instead of a directory path.
+- Sync operations use `CALL DOLT_*` SQL procedures instead of CLI commands.
+- Simplified TUI model: removed `autoSyncGen`, `autoSyncBusy`, `autoSyncDirty`, `autoSyncPushed` fields; replaced with single `pushBusy` flag.
+
+### Added
+
+- `Sync.Snapshot(msg)` method: fast in-process add + commit (no push).
+- `Sync.PushRemote()` method: push-only (no add/commit) for async background use.
+- `Syncer` interface expanded with `Snapshot` and `PushRemote` methods.
+- `openDoltDB()` helper in `cmd/root.go` handles embedded database creation on first run.
+- `toLocal()` helper in store to convert UTC timestamps from embedded driver to local time.
+- Build tag `gms_pure_go` removes ICU/cgo dependency for clean `go install`.
+
+### Removed
+
+- `dolt` CLI runtime dependency — no longer needed on PATH.
+- JSON parsing layer in store (`queryJSON`, `rowToTask`, `strVal`, `timeVal`, `intBool`, `tagsVal`).
+- Debounce auto-sync machinery (`autoSyncTickMsg`, `autoSyncResultMsg`, `autoSyncFlushQuitMsg`, `scheduleAutoSync`, `doAutoSync`).
+- `Store.initRepo()` and `Store.runDolt()` CLI helpers.
+- `Sync.Dir()` method.
+
+### Fixed
+
+- "Cannot update manifest: database is read only" errors caused by concurrent CLI access during auto-sync.
+
 ## [0.5.0] - 2026-03-19
 
 ### Added
