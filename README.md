@@ -13,48 +13,23 @@ for tickets but still need to get done on time.
 ## Prerequisites
 
 - **Go** 1.25+
-- **C compiler** (cgo is required by the embedded Dolt engine)
-- **ICU libraries** (required by the Dolt regex engine)
-
-### macOS
-
-```sh
-brew install icu4c
-```
-
-Homebrew installs ICU as a keg-only formula. Set these before building:
-
-```sh
-export CGO_CPPFLAGS="-I$(brew --prefix icu4c)/include"
-export CGO_LDFLAGS="-L$(brew --prefix icu4c)/lib"
-```
-
-### Linux (Debian / Ubuntu)
-
-```sh
-sudo apt-get install libicu-dev
-```
-
-No extra flags needed — `pkg-config` finds ICU automatically.
-
-### Linux (Fedora / RHEL)
-
-```sh
-sudo dnf install libicu-devel
-```
 
 ## Install
 
-Build from source:
+```sh
+go install -tags gms_pure_go github.com/jwp23/kanteto/cmd/kt@latest
+```
+
+Or build from source:
 
 ```sh
 git clone https://github.com/jwp23/kanteto.git
 cd kanteto
-go build -o kt ./cmd/kt
+go build -tags gms_pure_go -o kt ./cmd/kt
 ```
 
-> **Note:** `go install` requires the CGO flags above to be set in your
-> environment since the embedded Dolt engine uses cgo.
+The `gms_pure_go` tag uses Go's stdlib regex instead of ICU, which removes
+the cgo/ICU dependency and allows a clean `go install` on any platform.
 
 ## Quick Start
 
