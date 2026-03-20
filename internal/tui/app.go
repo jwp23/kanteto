@@ -12,7 +12,9 @@ import (
 
 // Syncer provides sync operations for the TUI.
 type Syncer interface {
-	Push() error
+	Snapshot(msg string) error // add + commit (fast, in-process)
+	PushRemote() error         // push to origin (network I/O)
+	Push() error               // snapshot + push (for manual P key)
 	Pull() error
 	HasRemote(name string) bool
 }
@@ -90,12 +92,9 @@ type model struct {
 	syncer     Syncer
 	syncStatus string
 
-	// Auto-sync
-	autoSyncGen    int
-	autoSyncBusy   bool
-	autoSyncDirty  bool
-	autoSyncPushed bool
-	quitting       bool
+	// Async push
+	pushBusy bool
+	quitting bool
 
 	// Help overlay
 	showHelp bool
@@ -114,9 +113,7 @@ type syncResultMsg struct {
 	err error
 }
 type clearSyncMsg struct{}
-type autoSyncTickMsg struct{ gen int }
-type autoSyncResultMsg struct{ err error }
-type autoSyncFlushQuitMsg struct{}
+type asyncPushResultMsg struct{ err error }
 
 // New creates and returns the Bubble Tea program.
 func New(svc *task.Service, profile string, syncer Syncer, alertPlayer AlertPlayer) *tea.Program {
@@ -203,42 +200,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncStatus = ""
 		return m, nil
 
-	case autoSyncTickMsg:
-		if msg.gen != m.autoSyncGen || m.autoSyncPushed {
-			return m, nil
-		}
-		if m.autoSyncBusy {
-			m.autoSyncDirty = true
-			return m, nil
-		}
-		if m.syncer == nil || !m.syncer.HasRemote("origin") {
-			return m, nil
-		}
-		m.autoSyncBusy = true
-		return m, m.doAutoSync()
-
-	case autoSyncResultMsg:
-		m.autoSyncBusy = false
+	case asyncPushResultMsg:
+		m.pushBusy = false
 		if msg.err != nil {
 			if m.quitting {
 				return m, tea.Quit
 			}
-			m.syncStatus = "Auto-sync failed"
+			m.syncStatus = "Push failed"
 			return m, clearSyncStatusAfter(5 * time.Second)
 		}
-		if m.autoSyncDirty {
-			m.autoSyncDirty = false
-			m.autoSyncBusy = true
-			return m, m.doAutoSync()
-		}
-		m.autoSyncPushed = true
 		if m.quitting {
 			return m, tea.Quit
 		}
 		return m, nil
-
-	case autoSyncFlushQuitMsg:
-		return m, tea.Quit
 
 	case tea.KeyMsg:
 		if m.showHelp {
@@ -359,17 +333,10 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.quitting {
 			return m, tea.Quit
 		}
-		if m.syncer != nil && m.syncer.HasRemote("origin") && m.autoSyncGen > 0 && !m.autoSyncPushed {
+		if m.pushBusy {
 			m.quitting = true
-			m.syncStatus = "Syncing..."
-			timeout := tea.Tick(10*time.Second, func(time.Time) tea.Msg {
-				return autoSyncFlushQuitMsg{}
-			})
-			if m.autoSyncBusy {
-				return m, timeout
-			}
-			m.autoSyncBusy = true
-			return m, tea.Batch(m.doAutoSync(), timeout)
+			m.syncStatus = "Waiting for push..."
+			return m, nil
 		}
 		return m, tea.Quit
 
@@ -544,7 +511,6 @@ func (m model) handleKeypress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = errors.New("no remote configured")
 			return m, nil
 		}
-		m.autoSyncGen++
 		m.syncStatus = "Pushing..."
 		return m, m.doPush()
 
@@ -590,32 +556,26 @@ func clearSyncStatusAfter(d time.Duration) tea.Cmd {
 	})
 }
 
-func (m model) scheduleAutoSync() tea.Cmd {
-	if m.syncer == nil || !m.syncer.HasRemote("origin") {
-		return nil
-	}
-	gen := m.autoSyncGen
-	return tea.Tick(8*time.Second, func(time.Time) tea.Msg {
-		return autoSyncTickMsg{gen: gen}
-	})
-}
-
-func (m model) doAutoSync() tea.Cmd {
+func (m model) doAsyncPush() tea.Cmd {
 	syncer := m.syncer
 	return func() tea.Msg {
-		err := syncer.Push()
-		return autoSyncResultMsg{err: err}
+		err := syncer.PushRemote()
+		return asyncPushResultMsg{err: err}
 	}
 }
 
 func (m *model) afterMutation() tea.Cmd {
 	m.refreshData()
-	m.autoSyncGen++
-	m.autoSyncPushed = false
-	if m.autoSyncBusy {
-		m.autoSyncDirty = true
+	// Commit synchronously (fast, in-process)
+	if m.syncer != nil {
+		m.syncer.Snapshot(fmt.Sprintf("sync: %s", time.Now().Format("2006-01-02 15:04:05")))
 	}
-	return m.scheduleAutoSync()
+	// Fire async push if remote exists
+	if m.syncer != nil && m.syncer.HasRemote("origin") && !m.pushBusy {
+		m.pushBusy = true
+		return m.doAsyncPush()
+	}
+	return nil
 }
 
 func (m model) timeNav(dir int) model {

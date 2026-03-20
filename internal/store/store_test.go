@@ -1,26 +1,39 @@
 package store
 
 import (
-	"os/exec"
+	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
+	_ "github.com/dolthub/driver"
 	"github.com/jwp23/kanteto/internal/task"
 )
 
-func skipIfNoDolt(t *testing.T) {
+func testDB(t *testing.T) *sql.DB {
 	t.Helper()
-	if _, err := exec.LookPath("dolt"); err != nil {
-		t.Skip("dolt not found on PATH, skipping integration test")
+	dir := t.TempDir()
+	dsn := fmt.Sprintf("file://%s?commitname=test&commitemail=test@test&database=testdb", dir)
+	db, err := sql.Open("dolt", dsn)
+	if err != nil {
+		t.Fatalf("open dolt: %v", err)
 	}
+	t.Cleanup(func() { db.Close() })
+	for _, q := range []string{
+		"CREATE DATABASE IF NOT EXISTS testdb",
+		"USE testdb",
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("init db (%s): %v", q, err)
+		}
+	}
+	return db
 }
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	skipIfNoDolt(t)
-
-	dir := t.TempDir()
-	s, err := New(dir)
+	db := testDB(t)
+	s, err := New(db)
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}

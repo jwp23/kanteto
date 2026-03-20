@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,13 +15,6 @@ import (
 
 	_ "modernc.org/sqlite"
 )
-
-func skipIfNoDolt(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("dolt"); err != nil {
-		t.Skip("dolt not found on PATH, skipping integration test")
-	}
-}
 
 func createSQLiteDB(t *testing.T, dbPath string) *sql.DB {
 	t.Helper()
@@ -81,9 +73,17 @@ func insertSQLiteTask(t *testing.T, db *sql.DB, tk task.Task) {
 	}
 }
 
-func TestMigrate_HappyPath(t *testing.T) {
-	skipIfNoDolt(t)
+func openTestDoltDB(t *testing.T, dataDir string) *sql.DB {
+	t.Helper()
+	db, err := openDoltDB(dataDir)
+	if err != nil {
+		t.Fatalf("open dolt db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
 
+func TestMigrate_HappyPath(t *testing.T) {
 	parentDir := t.TempDir()
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
@@ -118,8 +118,8 @@ func TestMigrate_HappyPath(t *testing.T) {
 	}
 
 	// Verify tasks in Dolt
-	doltDir := filepath.Join(dataDir, "dolt")
-	ds, err := store.New(doltDir)
+	doltDB := openTestDoltDB(t, dataDir)
+	ds, err := store.New(doltDB)
 	if err != nil {
 		t.Fatalf("open dolt store: %v", err)
 	}
@@ -155,7 +155,6 @@ func TestMigrate_HappyPath(t *testing.T) {
 }
 
 func TestMigrate_NoSQLiteFile(t *testing.T) {
-	skipIfNoDolt(t)
 	parentDir := t.TempDir()
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
@@ -168,7 +167,6 @@ func TestMigrate_NoSQLiteFile(t *testing.T) {
 }
 
 func TestMigrate_AlreadyMigrated(t *testing.T) {
-	skipIfNoDolt(t)
 	parentDir := t.TempDir()
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
@@ -198,7 +196,6 @@ func TestMigrate_AlreadyMigrated(t *testing.T) {
 }
 
 func TestMigrate_ExistingEmptyRepo(t *testing.T) {
-	skipIfNoDolt(t)
 	parentDir := t.TempDir()
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
@@ -210,14 +207,9 @@ func TestMigrate_ExistingEmptyRepo(t *testing.T) {
 	insertSQLiteTask(t, db, task.Task{ID: task.NewID(), Title: "Migrate me", CreatedAt: now, Tags: []string{}})
 	db.Close()
 
-	// Pre-init dolt repo (simulates user running `dolt init` manually)
+	// Pre-create the dolt directory (simulates existing repo)
 	doltDir := filepath.Join(dataDir, "dolt")
 	os.MkdirAll(doltDir, 0o755)
-	initCmd := exec.Command("dolt", "init")
-	initCmd.Dir = doltDir
-	if out, err := initCmd.CombinedOutput(); err != nil {
-		t.Fatalf("dolt init: %s: %v", out, err)
-	}
 
 	// Migrate should succeed — store.New creates the tasks table idempotently
 	t.Setenv("XDG_DATA_HOME", parentDir)
@@ -231,7 +223,6 @@ func TestMigrate_ExistingEmptyRepo(t *testing.T) {
 }
 
 func TestMigrate_OldSchema(t *testing.T) {
-	skipIfNoDolt(t)
 	parentDir := t.TempDir()
 	dataDir := filepath.Join(parentDir, "kanteto")
 	os.MkdirAll(dataDir, 0o755)
@@ -269,8 +260,8 @@ func TestMigrate_OldSchema(t *testing.T) {
 	}
 
 	// Verify defaults were applied
-	doltDir := filepath.Join(dataDir, "dolt")
-	ds, err := store.New(doltDir)
+	doltDB := openTestDoltDB(t, dataDir)
+	ds, err := store.New(doltDB)
 	if err != nil {
 		t.Fatalf("open dolt: %v", err)
 	}

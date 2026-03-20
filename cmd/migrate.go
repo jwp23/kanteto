@@ -14,6 +14,7 @@ import (
 	"github.com/jwp23/kanteto/internal/task"
 	"github.com/spf13/cobra"
 
+	_ "github.com/dolthub/driver"
 	_ "modernc.org/sqlite"
 )
 
@@ -29,7 +30,6 @@ var migrateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dataDir := config.DataDir()
 		sqlitePath := filepath.Join(dataDir, "kanteto.db")
-		doltDir := filepath.Join(dataDir, "dolt")
 
 		// Check SQLite file exists
 		if _, err := os.Stat(sqlitePath); os.IsNotExist(err) {
@@ -42,11 +42,14 @@ var migrateCmd = &cobra.Command{
 			return fmt.Errorf("read SQLite: %w", err)
 		}
 
-		// Create Dolt repo (store.New handles init + schema idempotently)
-		if err := os.MkdirAll(doltDir, 0o755); err != nil {
-			return fmt.Errorf("create dolt dir: %w", err)
+		// Open Dolt database
+		db, err := openDoltDB(dataDir)
+		if err != nil {
+			return fmt.Errorf("open dolt: %w", err)
 		}
-		doltStore, err := store.New(doltDir)
+		defer db.Close()
+
+		doltStore, err := store.New(db)
 		if err != nil {
 			return fmt.Errorf("init dolt: %w", err)
 		}
@@ -68,13 +71,13 @@ var migrateCmd = &cobra.Command{
 		}
 
 		// Commit the migration
-		s := syncsvc.New(doltDir)
+		s := syncsvc.New(db)
 		if err := s.Commit("migrate: import from SQLite"); err != nil {
 			return fmt.Errorf("commit: %w", err)
 		}
 
 		fmt.Printf("Migrated %d tasks from SQLite to Dolt.\n", len(tasks))
-		fmt.Printf("Dolt repo: %s\n", doltDir)
+		fmt.Printf("Dolt repo: %s\n", filepath.Join(dataDir, "dolt"))
 		fmt.Println("You can safely delete the old SQLite file after verifying the migration.")
 		return nil
 	},

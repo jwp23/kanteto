@@ -1,35 +1,24 @@
 package sync
 
 import (
+	"database/sql"
 	"fmt"
-	"os/exec"
-	"strings"
 	"time"
 )
 
-// Sync provides Dolt sync operations (push/pull/remote management).
+// Sync provides Dolt sync operations via the embedded driver's DOLT_* procedures.
 type Sync struct {
-	dir string
+	db *sql.DB
 }
 
-// New creates a Sync instance operating on the given Dolt repo directory.
-func New(dir string) *Sync {
-	return &Sync{dir: dir}
+// New creates a Sync instance using the provided *sql.DB.
+func New(db *sql.DB) *Sync {
+	return &Sync{db: db}
 }
 
-// Dir returns the Dolt repo directory.
-func (s *Sync) Dir() string {
-	return s.dir
-}
-
-// InitRepo initializes a new Dolt repo in the directory.
-func (s *Sync) InitRepo() error {
-	return s.runDolt("init")
-}
-
-// Push stages all changes, commits with a timestamp, and pushes to origin.
-func (s *Sync) Push() error {
-	if err := s.runDolt("add", "-A"); err != nil {
+// Snapshot stages all changes and commits with the given message (no push).
+func (s *Sync) Snapshot(msg string) error {
+	if _, err := s.db.Exec("CALL DOLT_ADD('-A')"); err != nil {
 		return fmt.Errorf("stage: %w", err)
 	}
 
@@ -37,22 +26,36 @@ func (s *Sync) Push() error {
 	if err != nil {
 		return err
 	}
-	if !clean {
-		msg := fmt.Sprintf("sync: %s", time.Now().Format("2006-01-02 15:04:05"))
-		if err := s.runDolt("commit", "-m", msg); err != nil {
-			return fmt.Errorf("commit: %w", err)
-		}
+	if clean {
+		return nil
 	}
 
-	if err := s.runDolt("push", "origin", "main"); err != nil {
+	if _, err := s.db.Exec("CALL DOLT_COMMIT('-m', ?)", msg); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
+// PushRemote pushes to origin (no add/commit). For async background use.
+func (s *Sync) PushRemote() error {
+	if _, err := s.db.Exec("CALL DOLT_PUSH('origin', 'main')"); err != nil {
 		return fmt.Errorf("push: %w", err)
 	}
 	return nil
 }
 
+// Push stages all changes, commits with a timestamp, and pushes to origin.
+func (s *Sync) Push() error {
+	msg := fmt.Sprintf("sync: %s", time.Now().Format("2006-01-02 15:04:05"))
+	if err := s.Snapshot(msg); err != nil {
+		return err
+	}
+	return s.PushRemote()
+}
+
 // Pull fetches and merges from origin.
 func (s *Sync) Pull() error {
-	if err := s.runDolt("pull", "origin"); err != nil {
+	if _, err := s.db.Exec("CALL DOLT_PULL('origin')"); err != nil {
 		return fmt.Errorf("pull: %w", err)
 	}
 	return nil
@@ -60,79 +63,61 @@ func (s *Sync) Pull() error {
 
 // Commit stages all changes and creates a commit with the given message.
 func (s *Sync) Commit(msg string) error {
-	if err := s.runDolt("add", "-A"); err != nil {
-		return fmt.Errorf("stage: %w", err)
-	}
-	if err := s.runDolt("commit", "-m", msg); err != nil {
-		return fmt.Errorf("commit: %w", err)
-	}
-	return nil
+	return s.Snapshot(msg)
 }
 
 // AddRemote registers a new remote.
 func (s *Sync) AddRemote(name, url string) error {
-	return s.runDolt("remote", "add", name, url)
+	_, err := s.db.Exec("CALL DOLT_REMOTE('add', ?, ?)", name, url)
+	return err
 }
 
-// ListRemotes returns configured remotes (one per line, "name url" format).
+// ListRemotes returns configured remotes as "name\turl" strings.
 func (s *Sync) ListRemotes() ([]string, error) {
-	out, err := s.runDoltOutput("remote", "-v")
+	rows, err := s.db.Query("SELECT name, url FROM dolt_remotes")
 	if err != nil {
 		return nil, err
 	}
-	if out == "" {
-		return nil, nil
-	}
-	lines := strings.Split(out, "\n")
+	defer rows.Close()
+
 	var remotes []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			remotes = append(remotes, line)
+	for rows.Next() {
+		var name, url string
+		if err := rows.Scan(&name, &url); err != nil {
+			return nil, err
 		}
+		remotes = append(remotes, name+"\t"+url)
 	}
-	return remotes, nil
+	return remotes, rows.Err()
 }
 
 // HasRemote checks if a named remote exists.
 func (s *Sync) HasRemote(name string) bool {
-	remotes, err := s.ListRemotes()
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM dolt_remotes WHERE name = ?", name).Scan(&count)
 	if err != nil {
 		return false
 	}
-	for _, r := range remotes {
-		if strings.HasPrefix(r, name+"\t") || strings.HasPrefix(r, name+" ") {
-			return true
-		}
-	}
-	return false
+	return count > 0
 }
 
 // IsClean returns true if the working set has no uncommitted changes.
 func (s *Sync) IsClean() (bool, error) {
-	out, err := s.runDoltOutput("status")
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM dolt_status").Scan(&count)
 	if err != nil {
 		return false, err
 	}
-	return strings.Contains(out, "nothing to commit"), nil
+	return count == 0, nil
 }
 
-func (s *Sync) runDolt(args ...string) error {
-	cmd := exec.Command("dolt", args...)
-	cmd.Dir = s.dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("dolt %s: %s: %w", args[0], strings.TrimSpace(string(out)), err)
+// InitRepo creates an initial commit in a new Dolt database.
+func (s *Sync) InitRepo() error {
+	if _, err := s.db.Exec("CALL DOLT_ADD('-A')"); err != nil {
+		return fmt.Errorf("stage: %w", err)
+	}
+	if _, err := s.db.Exec("CALL DOLT_COMMIT('--allow-empty', '-m', 'init')"); err != nil {
+		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
-}
-
-func (s *Sync) runDoltOutput(args ...string) (string, error) {
-	cmd := exec.Command("dolt", args...)
-	cmd.Dir = s.dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("dolt %s: %s: %w", args[0], strings.TrimSpace(string(out)), err)
-	}
-	return strings.TrimSpace(string(out)), nil
 }

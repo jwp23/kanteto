@@ -1,11 +1,9 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,41 +15,18 @@ const timeLayout = "2006-01-02 15:04:05"
 const taskColumns = `id, title, due_at, completed, completed_at, created_at,
 	recurrence_pattern, recurrence_time, tags, profile`
 
-// Store is a Dolt-backed task repository that shells out to `dolt sql`.
+// Store is a Dolt-backed task repository using the embedded driver.
 type Store struct {
-	dir string
+	db *sql.DB
 }
 
-// New opens (or creates) a Dolt database in dir and ensures the schema exists.
-func New(dir string) (*Store, error) {
-	if _, err := exec.LookPath("dolt"); err != nil {
-		return nil, fmt.Errorf("dolt not found on PATH: install from https://docs.dolthub.com/introduction/installation")
-	}
-
-	s := &Store{dir: dir}
-
-	if _, err := os.Stat(filepath.Join(dir, ".dolt")); os.IsNotExist(err) {
-		if err := s.initRepo(); err != nil {
-			return nil, fmt.Errorf("init dolt repo: %w", err)
-		}
-	}
-
+// New creates a Store using the provided *sql.DB and ensures the schema exists.
+func New(db *sql.DB) (*Store, error) {
+	s := &Store{db: db}
 	if err := s.ensureSchema(); err != nil {
 		return nil, fmt.Errorf("ensure schema: %w", err)
 	}
-
 	return s, nil
-}
-
-func (s *Store) initRepo() error {
-	if err := s.runDolt("init"); err != nil {
-		return err
-	}
-
-	if err := s.runDolt("add", "-A"); err != nil {
-		return err
-	}
-	return s.runDolt("commit", "-m", "init", "--allow-empty")
 }
 
 func (s *Store) ensureSchema() error {
@@ -67,10 +42,11 @@ func (s *Store) ensureSchema() error {
 		tags                JSON NOT NULL,
 		profile             VARCHAR(255) NOT NULL DEFAULT 'default'
 	);`
-	return s.execSQL(schema)
+	_, err := s.db.Exec(schema)
+	return err
 }
 
-// Close is a no-op for the CLI store.
+// Close is a no-op; the caller owns the *sql.DB lifecycle.
 func (s *Store) Close() error {
 	return nil
 }
@@ -84,7 +60,8 @@ func (s *Store) Create(t task.Task) error {
 		quoteNullStr(t.RecurrencePattern), quoteNullStr(t.RecurrenceTime),
 		quote(marshalTags(t.Tags)), quote(t.Profile),
 	)
-	return s.execSQL(q)
+	_, err := s.db.Exec(q)
+	return err
 }
 
 // Get retrieves a task by ID.
@@ -107,13 +84,15 @@ func (s *Store) Complete(id string) error {
 		`UPDATE tasks SET completed = 1, completed_at = %s WHERE id = %s`,
 		quoteTime(now), quote(id),
 	)
-	return s.execSQL(q)
+	_, err := s.db.Exec(q)
+	return err
 }
 
 // Delete removes a task permanently.
 func (s *Store) Delete(id string) error {
 	q := fmt.Sprintf(`DELETE FROM tasks WHERE id = %s`, quote(id))
-	return s.execSQL(q)
+	_, err := s.db.Exec(q)
+	return err
 }
 
 // Update saves changes to a task.
@@ -128,13 +107,15 @@ func (s *Store) Update(t task.Task) error {
 		boolToInt(t.Completed), quoteTimePtr(t.CompletedAt),
 		quote(marshalTags(t.Tags)), quote(t.Profile), quote(t.ID),
 	)
-	return s.execSQL(q)
+	_, err := s.db.Exec(q)
+	return err
 }
 
 // UpdateDueAt changes a task's due date (for snooze).
 func (s *Store) UpdateDueAt(id string, dueAt *time.Time) error {
 	q := fmt.Sprintf(`UPDATE tasks SET due_at = %s WHERE id = %s`, quoteTimePtr(dueAt), quote(id))
-	return s.execSQL(q)
+	_, err := s.db.Exec(q)
+	return err
 }
 
 // ListAll returns all tasks, optionally including completed.
@@ -185,182 +166,86 @@ func (s *Store) ListUndated() ([]task.Task, error) {
 
 // ListProfiles returns distinct profile names from all tasks.
 func (s *Store) ListProfiles() ([]string, error) {
-	q := `SELECT DISTINCT profile FROM tasks ORDER BY profile`
-	out, err := s.queryJSON(q)
+	rows, err := s.db.Query(`SELECT DISTINCT profile FROM tasks ORDER BY profile`)
 	if err != nil {
 		return nil, err
 	}
-
-	var result struct {
-		Rows []map[string]any `json:"rows"`
-	}
-	if out == "" || out == "{}" {
-		return nil, nil
-	}
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
-		return nil, fmt.Errorf("parse profiles: %w", err)
-	}
+	defer rows.Close()
 
 	var profiles []string
-	for _, row := range result.Rows {
-		if p, ok := row["profile"].(string); ok {
-			profiles = append(profiles, p)
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
 		}
+		profiles = append(profiles, p)
 	}
-	return profiles, nil
+	return profiles, rows.Err()
 }
 
-// runDolt executes a dolt CLI command (not sql).
-func (s *Store) runDolt(args ...string) error {
-	cmd := exec.Command("dolt", args...)
-	cmd.Dir = s.dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("dolt %s: %s: %w", args[0], strings.TrimSpace(string(out)), err)
-	}
-	return nil
-}
-
-// execSQL runs a write query (INSERT/UPDATE/DELETE) — no JSON output needed.
-func (s *Store) execSQL(q string) error {
-	cmd := exec.Command("dolt", "sql", "-q", q)
-	cmd.Dir = s.dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("dolt sql: %s: %w", strings.TrimSpace(string(out)), err)
-	}
-	return nil
-}
-
-// queryJSON runs a SELECT query with -r json and returns raw JSON stdout.
-func (s *Store) queryJSON(q string) (string, error) {
-	cmd := exec.Command("dolt", "sql", "-q", q, "-r", "json")
-	cmd.Dir = s.dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("dolt sql: %s: %w", strings.TrimSpace(string(out)), err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-// queryTasks runs a SELECT query and parses the JSON result into tasks.
+// queryTasks runs a SELECT query and scans results into tasks.
 func (s *Store) queryTasks(q string) ([]task.Task, error) {
-	out, err := s.queryJSON(q)
+	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	var result struct {
-		Rows []map[string]any `json:"rows"`
-	}
-	if out == "" || out == "{}" {
-		return nil, nil
-	}
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
-		return nil, fmt.Errorf("parse query result: %w", err)
-	}
+	var tasks []task.Task
+	for rows.Next() {
+		var t task.Task
+		var dueAt, completedAt sql.NullTime
+		var createdAt time.Time
+		var completed bool
+		var recurrencePattern, recurrenceTime sql.NullString
+		var tagsJSON string
 
-	tasks := make([]task.Task, 0, len(result.Rows))
-	for _, row := range result.Rows {
-		t, err := rowToTask(row)
+		err := rows.Scan(&t.ID, &t.Title, &dueAt, &completed, &completedAt,
+			&createdAt, &recurrencePattern, &recurrenceTime, &tagsJSON, &t.Profile)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan task: %w", err)
 		}
+
+		t.Completed = completed
+		t.CreatedAt = toLocal(createdAt)
+		if dueAt.Valid {
+			lt := toLocal(dueAt.Time)
+			t.DueAt = &lt
+		}
+		if completedAt.Valid {
+			lt := toLocal(completedAt.Time)
+			t.CompletedAt = &lt
+		}
+		if recurrencePattern.Valid {
+			t.RecurrencePattern = recurrencePattern.String
+		}
+		if recurrenceTime.Valid {
+			t.RecurrenceTime = recurrenceTime.String
+		}
+		t.Tags = unmarshalTags(tagsJSON)
 		tasks = append(tasks, t)
 	}
-	return tasks, nil
+	return tasks, rows.Err()
 }
 
-func rowToTask(row map[string]any) (task.Task, error) {
-	var t task.Task
-
-	t.ID = strVal(row, "id")
-	t.Title = strVal(row, "title")
-	t.DueAt = timeVal(row, "due_at")
-	t.Completed = intBool(row, "completed")
-	t.CompletedAt = timeVal(row, "completed_at")
-
-	if v := strVal(row, "created_at"); v != "" {
-		parsed, err := time.ParseInLocation(timeLayout, v, time.Local)
-		if err != nil {
-			return t, fmt.Errorf("parse created_at: %w", err)
-		}
-		t.CreatedAt = parsed
+// toLocal reinterprets a UTC time as local time (Dolt stores DATETIME without timezone).
+func toLocal(t time.Time) time.Time {
+	if t.Location() == time.UTC {
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.Local)
 	}
-
-	t.RecurrencePattern = strVal(row, "recurrence_pattern")
-	t.RecurrenceTime = strVal(row, "recurrence_time")
-	t.Tags = tagsVal(row, "tags")
-	t.Profile = strVal(row, "profile")
-
-	return t, nil
+	return t
 }
 
-func strVal(row map[string]any, key string) string {
-	v, ok := row[key]
-	if !ok || v == nil {
-		return ""
-	}
-	s, ok := v.(string)
-	if !ok {
-		return fmt.Sprintf("%v", v)
-	}
-	return s
-}
-
-func timeVal(row map[string]any, key string) *time.Time {
-	s := strVal(row, key)
+func unmarshalTags(s string) []string {
+	var tags []string
 	if s == "" {
-		return nil
-	}
-	parsed, err := time.ParseInLocation(timeLayout, s, time.Local)
-	if err != nil {
-		return nil
-	}
-	return &parsed
-}
-
-func intBool(row map[string]any, key string) bool {
-	v, ok := row[key]
-	if !ok || v == nil {
-		return false
-	}
-	f, ok := v.(float64)
-	if !ok {
-		return false
-	}
-	return f != 0
-}
-
-func tagsVal(row map[string]any, key string) []string {
-	v, ok := row[key]
-	if !ok || v == nil {
 		return []string{}
 	}
-
-	// Dolt returns JSON columns as native arrays
-	arr, ok := v.([]any)
-	if !ok {
-		// Fallback: maybe it's a string
-		s, ok := v.(string)
-		if !ok {
-			return []string{}
-		}
-		var tags []string
-		if err := json.Unmarshal([]byte(s), &tags); err != nil {
-			return []string{}
-		}
-		if tags == nil {
-			return []string{}
-		}
-		return tags
+	if err := json.Unmarshal([]byte(s), &tags); err != nil {
+		return []string{}
 	}
-
-	tags := make([]string, 0, len(arr))
-	for _, item := range arr {
-		if s, ok := item.(string); ok {
-			tags = append(tags, s)
-		}
+	if tags == nil {
+		return []string{}
 	}
 	return tags
 }

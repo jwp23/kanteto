@@ -1,21 +1,23 @@
 package cmd
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/jwp23/kanteto/internal/config"
 	"github.com/jwp23/kanteto/internal/store"
-	"github.com/jwp23/kanteto/internal/sync"
+	syncsvc "github.com/jwp23/kanteto/internal/sync"
 	"github.com/jwp23/kanteto/internal/task"
 	"github.com/jwp23/kanteto/internal/tui"
 	"github.com/spf13/cobra"
+
+	_ "github.com/dolthub/driver"
 )
 
 var (
 	svc             *task.Service
-	syncer          *sync.Sync
+	syncer          *syncsvc.Sync
 	cfg             config.Config
 	profileOverride string
 )
@@ -48,14 +50,38 @@ func activeProfile() string {
 	return cfg.ActiveProfile
 }
 
-func initService() error {
-	dataDir := config.DataDir()
-	doltDir := filepath.Join(dataDir, "dolt")
-	if err := os.MkdirAll(doltDir, 0o755); err != nil {
-		return fmt.Errorf("create data dir: %w", err)
+// openDoltDB opens a Dolt embedded database at the given data directory.
+func openDoltDB(dataDir string) (*sql.DB, error) {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 
-	s, err := store.New(doltDir)
+	dsn := fmt.Sprintf("file://%s?commitname=kanteto&commitemail=kanteto@local&database=kanteto", dataDir)
+	db, err := sql.Open("dolt", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open dolt: %w", err)
+	}
+
+	// Ensure the database exists (first-run scenario).
+	if _, err := db.Exec("CREATE DATABASE IF NOT EXISTS kanteto"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create database: %w", err)
+	}
+	if _, err := db.Exec("USE kanteto"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("use database: %w", err)
+	}
+	return db, nil
+}
+
+func initService() error {
+	dataDir := config.DataDir()
+	db, err := openDoltDB(dataDir)
+	if err != nil {
+		return err
+	}
+
+	s, err := store.New(db)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
@@ -72,7 +98,7 @@ func initService() error {
 	}
 
 	svc = task.NewService(repo)
-	syncer = sync.New(doltDir)
+	syncer = syncsvc.New(db)
 	return nil
 }
 

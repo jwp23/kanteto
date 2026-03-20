@@ -1,25 +1,34 @@
 package task_test
 
 import (
-	"os/exec"
+	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
+	_ "github.com/dolthub/driver"
 	"github.com/jwp23/kanteto/internal/store"
 	"github.com/jwp23/kanteto/internal/task"
 )
 
-func skipIfNoDolt(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("dolt"); err != nil {
-		t.Skip("dolt not found on PATH, skipping integration test")
-	}
-}
-
 func newTestService(t *testing.T) *task.Service {
 	t.Helper()
-	skipIfNoDolt(t)
-	s, err := store.New(t.TempDir())
+	dir := t.TempDir()
+	dsn := fmt.Sprintf("file://%s?commitname=test&commitemail=test@test&database=testdb", dir)
+	db, err := sql.Open("dolt", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	for _, q := range []string{
+		"CREATE DATABASE IF NOT EXISTS testdb",
+		"USE testdb",
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("init db (%s): %v", q, err)
+		}
+	}
+	s, err := store.New(db)
 	if err != nil {
 		t.Fatal(err)
 	}
