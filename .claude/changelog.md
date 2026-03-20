@@ -46,6 +46,12 @@ This ensures transparency and traceability for all AI-executed workflows.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-03-20
+
+### Fixed
+
+- Tasks not visible after `go install` of v0.6.0: embedded Dolt DSN used `database=kanteto` instead of `database=dolt`, creating an empty database instead of reading the existing one.
+
 ## [0.6.0] - 2026-03-20
 
 ### Changed
